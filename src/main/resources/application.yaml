@@ -1,0 +1,13 @@
+server:
+  port: 9000
+
+#logging:
+#  level:
+#    root: WARN
+#    org:
+#      apache:
+#        coyote: ERROR
+#        catalina: ERROR
+#      springframework:
+#        web: ERROR
+#    com: WARN
