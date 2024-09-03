@@ -2,6 +2,7 @@ package com.cn.jmw.processor.datasource.jdbc.adapter;
 
 import com.cn.jmw.processor.datasource.JDBCAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
+
 import java.util.Arrays;
 import java.util.List;
 

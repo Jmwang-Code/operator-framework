@@ -5,6 +5,7 @@ public enum FileTypeEnum {
     ORC("ORC"),
     CSV_WITH_NAMES("CSV_WITH_NAMES"),
     PARQUET("PARQUET"),
+    JSON("JSON")
 
     ;
     private String name;

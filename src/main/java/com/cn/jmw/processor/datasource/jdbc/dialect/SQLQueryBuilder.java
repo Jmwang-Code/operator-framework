@@ -161,7 +161,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addCondition(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum operatorEnum) {
-        this.conditions.add(buildConditions(field, operator, value, operatorEnum));
+        this.conditions.add(new QueryCondition(field, operator, value, operatorEnum));
         return this;
     }
 
@@ -174,7 +174,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addAndCondition(String field, SQLOperatorEnum operator, Object value) {
-        this.conditions.add(buildConditions(field, operator, value, SQLOperatorEnum.AND));
+        this.conditions.add(new QueryCondition(field, operator, value, SQLOperatorEnum.AND));
         return this;
     }
 
@@ -187,7 +187,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addOrCondition(String field, SQLOperatorEnum operator, Object value) {
-        this.conditions.add(buildConditions(field, operator, value, SQLOperatorEnum.OR));
+        this.conditions.add(new QueryCondition(field, operator, value, SQLOperatorEnum.OR));
         return this;
     }
 
@@ -226,7 +226,7 @@ public class SQLQueryBuilder {
      */
     public SQLQueryBuilder addAndConditions(Collection<QueryCondition> conditions) {
         for (QueryCondition condition : conditions) {
-            this.conditions.add(buildConditions(condition.getField(), condition.getOperator(), condition.getValue(), SQLOperatorEnum.AND));
+            this.conditions.add(new QueryCondition(condition.getField(), condition.getOperator(), condition.getValue(), SQLOperatorEnum.AND));
         }
         return this;
     }
@@ -239,7 +239,7 @@ public class SQLQueryBuilder {
      */
     public SQLQueryBuilder addOrConditions(Collection<QueryCondition> conditions) {
         for (QueryCondition condition : conditions) {
-            this.conditions.add(buildConditions(condition.getField(), condition.getOperator(), condition.getValue(), SQLOperatorEnum.OR));
+            this.conditions.add(new QueryCondition(condition.getField(), condition.getOperator(), condition.getValue(), SQLOperatorEnum.OR));
         }
         return this;
     }
@@ -287,7 +287,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addJoin(SQLJoinEnum type, SQLQueryBuilder subQuery, String alias, String onCondition) {
-        this.joins.add(buildJoin(type, subQuery, alias, onCondition));
+        this.joins.add(new QueryJoin(type, subQuery, alias, onCondition));
         return this;
     }
 
@@ -301,7 +301,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addJoin(SQLJoinEnum type, String table, String alias, String onCondition) {
-        this.joins.add(buildJoin(type, table, alias, onCondition));
+        this.joins.add(new QueryJoin(type, table, alias, onCondition));
         return this;
     }
 
@@ -330,12 +330,12 @@ public class SQLQueryBuilder {
     }
 
     public SQLQueryBuilder addHavingConditions(String field, SQLOperatorEnum operator, Object value) {
-        this.addHavingConditions(buildHavingConditions(field, operator, value));
+        this.addHavingConditions(new QueryCondition(field, operator, value));
         return this;
     }
 
     public SQLQueryBuilder addHavingCondition(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum operatorEnum) {
-        this.addHavingConditions(buildConditions(field, operator, value, operatorEnum));
+        this.addHavingConditions(new QueryCondition(field, operator, value, operatorEnum));
         return this;
     }
 
@@ -351,7 +351,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addHavingConditions(SQLFunctionEnum function, String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum joinOperator, List<Object> functionParams) {
-        this.addHavingConditions(buildHavingConditions(function, field, operator, value, joinOperator, functionParams));
+        this.addHavingConditions(new QueryCondition(function, field, operator, value, joinOperator, functionParams));
         return this;
     }
 
@@ -374,7 +374,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addOrder(String field, SQLOperatorEnum order) {
-        this.addOrder(buildOrder(field, order));
+        this.addOrder(new QueryOrderBy(field, order));
         return this;
     }
 
@@ -408,7 +408,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder tableName(String table, String tableAlias) {
-        this.table = buildTable(table, tableAlias);
+        this.table = new QueryTable(table, tableAlias);
         return this;
     }
 
@@ -420,7 +420,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder tableName(SQLQueryBuilder sqlQueryBuilder, String tableAlias) {
-        this.table = buildTable(sqlQueryBuilder, tableAlias);
+        this.table = new QueryTable(sqlQueryBuilder, tableAlias);
         return this;
     }
 
@@ -431,7 +431,7 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder tableName(String table) {
-        this.table = buildTable(table);
+        this.table = new QueryTable(table);
         return this;
     }
 
@@ -482,9 +482,12 @@ public class SQLQueryBuilder {
      *
      * @return 完整的表名
      */
-    private String getFullTableName() {
+    private String getFullTableName(List<Object> dataList) {
         if (table != null && table.getSqlQueryBuilder() != null) {
-            return table.getSqlQueryBuilder().buildSQL();
+            QuerySQLResult querySQLResult = table.getSqlQueryBuilder().buildQuerySQLResult();
+            dataList.addAll(querySQLResult.getDataList());
+//            return table.getSqlQueryBuilder().buildSQL();
+            return "(" + querySQLResult.getSql() + ")";
         }
         return StringUtils.isNotBlank(schemaName) ? "`" + schemaName + "`.`" + table.getTable() + "`" : "`" + table.getTable() + "`";
     }
@@ -531,7 +534,7 @@ public class SQLQueryBuilder {
      * @param create DSLContext对象
      * @return SelectJoinStep<Record>对象
      */
-    private SelectJoinStep<Record> buildQuery(DSLContext create,boolean isBuildSQL) {
+    private SelectJoinStep<Record> buildQuery(DSLContext create, List<Object> dataList) {
         List<Field<?>> selectFields = new ArrayList<>();
         for (QueryField queryField : fields) {
             selectFields.add(getQualifiedField(queryField));
@@ -540,58 +543,69 @@ public class SQLQueryBuilder {
         SelectJoinStep<Record> query;
 
 
+        /**
+         * FROM 的位置可以有子嵌套的查询语句，比如getFullTableName。也就是说这里存在params参数无法带出的问题。
+         */
         //有一种当不存在selectFields值的时候，并且不存在groups的时候，select *
         if (selectFields.size() == 0 && groups.size() == 0) {
             if (StringUtils.isBlank(table.getTableAlias()) || getTableAliasOrName().equals(table.getTable())) {
-                query = create.select().from(DSL.table(getFullTableName()));
+                query = create.select().from(DSL.table(getFullTableName(dataList)));
             } else {
-                query = create.select().from(DSL.table(getFullTableName()).as(getTableAliasOrName()));
+                query = create.select().from(DSL.table(getFullTableName(dataList)).as(getTableAliasOrName()));
             }
         } else {
             if (table == null) {
                 query = (SelectJoinStep<Record>) create.select(selectFields);
             } else if (StringUtils.isBlank(table.getTableAlias()) || getTableAliasOrName().equals(table.getTable())) {
-                query = create.select(selectFields).from(DSL.table(getFullTableName()));
+                query = create.select(selectFields).from(DSL.table(getFullTableName(dataList)));
             } else {
-                query = create.select(selectFields).from(DSL.table(getFullTableName()).as(getTableAliasOrName()));
+                query = create.select(selectFields).from(DSL.table(getFullTableName(dataList)).as(getTableAliasOrName()));
             }
-        }
-
-        SelectJoinStep<Record> finalQuery = query;
-        stringConditions.stream().map(condition -> finalQuery.where(DSL.condition(condition))).collect(Collectors.toList());
-        if (conditions != null && !conditions.isEmpty()) {
-            Condition whereCondition = null;
-            for (QueryCondition condition : conditions) {
-                if (whereCondition == null) {
-                    whereCondition = condition.buildCondition(query, null,isBuildSQL);
-                } else if (SQLOperatorEnum.OR == (condition.getJoinOperator())) {
-                    whereCondition = whereCondition.or(condition.buildCondition(query, null,isBuildSQL));
-                } else {
-                    whereCondition = whereCondition.and(condition.buildCondition(query, null,isBuildSQL));
-                }
-            }
-            query.where(whereCondition);
         }
 
         for (QueryJoin join : joins) {
             switch (join.getType()) {
                 case JOIN:
-                    query = query.join(join.toTable(create)).on(DSL.condition(join.getOnCondition()));
+                    query = query.join(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 case INNER_JOIN:
-                    query = query.innerJoin(join.toTable(create)).on(DSL.condition(join.getOnCondition()));
+                    query = query.innerJoin(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 case LEFT_JOIN:
-                    query = query.leftJoin(join.toTable(create)).on(DSL.condition(join.getOnCondition()));
+                    query = query.leftJoin(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 case RIGHT_JOIN:
-                    query = query.rightJoin(join.toTable(create)).on(DSL.condition(join.getOnCondition()));
+                    query = query.rightJoin(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 case FULL_OUTER_JOIN:
-                    query = query.fullJoin(join.toTable(create)).on(DSL.condition(join.getOnCondition()));
+                    query = query.fullJoin(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 default:
                     throw new UnsupportedOperationException("不支持的联接类型: " + join.getType());
+            }
+        }
+
+        SelectJoinStep<Record> finalQuery = query;
+        stringConditions.forEach(condition -> finalQuery.where(DSL.condition(condition)));
+        // 处理 conditions
+        if (conditions != null && !conditions.isEmpty()) {
+            Condition whereCondition = null;
+            for (QueryCondition condition : conditions) {
+                Condition currentCondition = condition.buildCondition(query, null, dataList);
+                //当前where中,第一次初始化
+                if (whereCondition == null) {
+                    whereCondition = currentCondition;
+                } else {
+                    if (condition.getJoinOperator() == SQLOperatorEnum.OR) {
+                        whereCondition = whereCondition.or(currentCondition);
+                    } else {
+                        whereCondition = whereCondition.and(currentCondition);
+                    }
+                }
+            }
+            // 将最终条件应用到 query
+            if (whereCondition != null) {
+                query.where(whereCondition);
             }
         }
 
@@ -604,11 +618,11 @@ public class SQLQueryBuilder {
             Condition havingCondition = null;
             for (QueryCondition condition : havingConditions) {
                 if (havingCondition == null) {
-                    havingCondition = condition.buildCondition(query, null,isBuildSQL);
+                    havingCondition = condition.buildCondition(query, null, dataList);
                 } else if (SQLOperatorEnum.OR == (condition.getJoinOperator())) {
-                    havingCondition = havingCondition.or(condition.buildCondition(query, null,isBuildSQL));
+                    havingCondition = havingCondition.or(condition.buildCondition(query, null, dataList));
                 } else {
-                    havingCondition = havingCondition.and(condition.buildCondition(query, null,isBuildSQL));
+                    havingCondition = havingCondition.and(condition.buildCondition(query, null, dataList));
                 }
             }
             query.having(havingCondition);
@@ -634,9 +648,11 @@ public class SQLQueryBuilder {
         }
 
         if (limit != null) {
+            dataList.add(limit);
             query.limit(limit);
         }
         if (offset != null) {
+            dataList.add(limit);
             query.offset(offset);
         }
 
@@ -649,8 +665,35 @@ public class SQLQueryBuilder {
      * @return 生成的SQL字符串
      */
     public String buildSQL() {
-        QuerySQLResult querySQLResult = buildPlaintextQuerySQL();
-        return getRealSql(querySQLResult.getSql(), querySQLResult.getData());
+        QuerySQLResult querySQLResult = buildQuerySQLResult();
+        //query.getParams()的value参数写入Object数字
+        Object[] array = querySQLResult.getDataList().stream().map(
+                param -> {
+                    //1.如果是数字类型就直接返回
+                    //2.如果是字符串类型，
+                    // 2.1 如果包含了单引号,并且不包含双引号，则加上双引号
+                    // 2.2 如果包含了双引号，并且不包含单引号，则加上单引号
+                    // 2.3 如果既包含单引号又包含双引号，则清空里面的双引号，加上单引号
+                    if (param instanceof Integer
+                            || param instanceof Long
+                            || param instanceof Double
+                            || param instanceof Float
+                            || param instanceof Short) {
+                        return param;
+                    } else if (param instanceof String) {
+                        if (param.toString().contains("'") && !param.toString().contains("\"")) {
+                            return "\"" + param + "\"";
+                        }else if (param.toString().contains("\"") && !param.toString().contains("'")) {
+                            return "\'" + param + "\'";
+                        }else {
+                            //如果既包含单引号又包含双引号，则清空里面的双引号，加上单引号
+                            return "\'" + ((String) param).replaceAll("\"", "") + "\'";
+                        }
+                    }
+                    return param;
+                }
+        ).toArray();
+        return getRealSql(querySQLResult.getSql(), array);
     }
 
     /**
@@ -659,93 +702,10 @@ public class SQLQueryBuilder {
      * @return 生成的占位符的SQL对象
      */
     public QuerySQLResult buildQuerySQLResult() {
-        return buildPlaceHolderQuerySQLResult(true);
-    }
-
-    /**
-     * 构建子查询的SQL字符串。
-     *
-     * @param create DSLContext对象
-     * @return 生成的子查询SQL字符串
-     */
-    public String buildSubQuerySQL(DSLContext create) {
-        QuerySQLResult querySQLResult = buildPlaintextQuerySQL(create);
-        return getRealSql(querySQLResult.getSql(), querySQLResult.getData());
-    }
-
-    /**
-     * 构建子查询占位符的SQL字符串。
-     *
-     * @return 生成的子查询SQL字符串
-     */
-    public String buildSubQuerySQL() {
-        QuerySQLResult querySQLResult = buildPlaceHolderQuerySQLResult(true);
-        return getRealSql(querySQLResult.getSql(), querySQLResult.getData());
-    }
-
-    /**
-     * 占位符构建查询SQL字符串。并且留下对应的占位Object数组。
-     * <p>
-     * 返回到QuerySQLResult对象中
-     * String sql;
-     * Object[][] data;
-     */
-    private QuerySQLResult buildPlaintextQuerySQL(DSLContext create) {
-        SelectJoinStep<Record> query = buildQuery(create,true);
-        //query.getParams()的value参数写入Object数字
-        Object[] array = query.getParams().entrySet().stream().map(
-                param -> {
-                    Object value = param.getValue().getValue();
-                    if (value instanceof String
-                            && StringUtils.isNotBlank((String) value)
-                            && ((String) value).contains("'")
-                            && !((String) value).contains("\"")) {
-                        return "\"" + value + "\"";
-                    } else if (value instanceof Integer
-                            || value instanceof Long
-                            || value instanceof Double
-                            || value instanceof Float
-                            || value instanceof Short) {
-                        return value;
-                    } else {
-                        return "'" + param.getValue().getValue() + "'";
-                    }
-                }
-        ).toArray();
-        return new QuerySQLResult(query.getSQL(ParamType.INDEXED), array);
-    }
-
-    /**
-     * 占位符构建查询SQL字符串。并且留下对应的占位Object数组。
-     * <p>
-     * 返回到QuerySQLResult对象中
-     * String sql;
-     * Object[][] data; buildPlaceHolderQuerySQLResult
-     */
-    private QuerySQLResult buildPlaintextQuerySQL() {
+        List<Object> dataList = new ArrayList<>();
         DSLContext create = DSL.using(sqlDialect);
-        SelectJoinStep<Record> query = buildQuery(create,false);
-        //query.getParams()的value参数写入Object数字
-        Object[] array = query.getParams().entrySet().stream().map(
-                param -> {
-                    Object value = param.getValue().getValue();
-                    if (value instanceof String
-                            && StringUtils.isNotBlank((String) value)
-                            && ((String) value).contains("'")
-                            && !((String) value).contains("\"")) {
-                        return "\"" + value + "\"";
-                    } else if (value instanceof Integer
-                            || value instanceof Long
-                            || value instanceof Double
-                            || value instanceof Float
-                            || value instanceof Short) {
-                        return value;
-                    } else {
-                        return "\"" + ((String) value).replaceAll("\"", "") + "\"";
-                    }
-                }
-        ).toArray();
-        return new QuerySQLResult(query.getSQL(ParamType.INDEXED), array);
+        SelectJoinStep<Record> query = buildQuery(create, dataList);
+        return new QuerySQLResult(query.getSQL(ParamType.INDEXED), dataList);
     }
 
     private String getRealSql(String sql, Object[] data) {
@@ -772,106 +732,6 @@ public class SQLQueryBuilder {
 
         return realSql.toString();
     }
-
-    private QuerySQLResult buildPlaceHolderQuerySQLResult(boolean isBuildSQL) {
-        DSLContext create = DSL.using(sqlDialect);
-        SelectJoinStep<Record> query = buildQuery(create,isBuildSQL);
-        return new QuerySQLResult(query.getSQL(ParamType.INDEXED), query.getParams().values().toArray());
-    }
-
-    private QueryTable buildTable(String table, String tableAlias) {
-        return new QueryTable(table, tableAlias);
-    }
-
-    private QueryTable buildTable(String table) {
-        return new QueryTable(table);
-    }
-
-    private QueryTable buildTable(SQLQueryBuilder sqlQueryBuilder, String tableAlias) {
-        return new QueryTable(sqlQueryBuilder, tableAlias);
-    }
-
-
-    /**
-     * 构建连接对象。
-     *
-     * @param type        连接类型（例如：INNER, LEFT, RIGHT等）
-     * @param table       目标表
-     * @param alias       别名
-     * @param onCondition 连接条件
-     * @return QueryJoin对象
-     */
-    private QueryJoin buildJoin(SQLJoinEnum type, String table, String alias, String onCondition) {
-        return new QueryJoin(type, table, alias, onCondition);
-    }
-
-    /**
-     * 构建连接对象。
-     *
-     * @param type        连接类型（例如：INNER, LEFT, RIGHT等）
-     * @param subQuery    子查询构建器
-     * @param alias       别名
-     * @param onCondition 连接条件
-     * @return QueryJoin对象
-     */
-    private QueryJoin buildJoin(SQLJoinEnum type, SQLQueryBuilder subQuery, String alias, String onCondition) {
-        return new QueryJoin(type, subQuery, alias, onCondition);
-    }
-
-    /**
-     * 构建排序对象。
-     *
-     * @param field 字段名
-     * @param order 排序方式
-     * @return QueryOrderBy对象
-     */
-    private QueryOrderBy buildOrder(String field, SQLOperatorEnum order) {
-        return new QueryOrderBy(field, order);
-    }
-
-    /**
-     * 构建having条件对象。
-     *
-     * @param function       函数类型
-     * @param field          字段名
-     * @param operator       操作符
-     * @param value          条件值
-     * @param joinOperator   连接操作符
-     * @param functionParams 函数参数
-     * @return QueryCondition对象
-     */
-    private QueryCondition buildHavingConditions(SQLFunctionEnum function, String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum joinOperator, List<Object> functionParams) {
-        return new QueryCondition(function, field, operator, value, joinOperator, functionParams);
-    }
-
-    /**
-     * 构建having条件对象。
-     *
-     * @param field    字段名
-     * @param operator 操作符
-     * @param value    条件值
-     * @return QueryCondition对象
-     */
-    private QueryCondition buildHavingConditions(String field, SQLOperatorEnum operator, Object value) {
-        return new QueryCondition(field, operator, value);
-    }
-
-    /**
-     * 构建条件对象。
-     *
-     * @param field        字段名
-     * @param operator     操作符
-     * @param value        条件值
-     * @param operatorEnum 操作类型（AND/OR）
-     * @return QueryCondition对象
-     */
-    private QueryCondition buildConditions(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum operatorEnum) {
-        return new QueryCondition(field, operator, value, operatorEnum);
-    }
-
-//    private QueryCondition buildConditions(SQLFunctionEnum function, String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum joinOperator,List<Object> functionParams) {
-//        return new QueryCondition(function,field, operator, value, joinOperator,functionParams);
-//    }
 
     public SQLQueryBuilder addHavingConditions(List<QueryCondition> metricConditions) {
         this.havingConditions.addAll(metricConditions);

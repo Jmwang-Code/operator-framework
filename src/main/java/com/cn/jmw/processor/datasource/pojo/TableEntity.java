@@ -1,7 +1,8 @@
 package com.cn.jmw.processor.datasource.pojo;
 
-import java.util.List;
 import lombok.Data;
+
+import java.util.List;
 /**
  * TableEntity类用于表示数据库表的信息。
  * <p>

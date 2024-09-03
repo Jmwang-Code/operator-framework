@@ -1,14 +1,13 @@
 package com.cn.jmw.processor.datasource;
 
-import com.cn.jmw.processor.datasource.factory.DataSourceConnectionPool;
-import com.cn.jmw.processor.datasource.pojo.ColumnEntity;
-import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
-import com.cn.jmw.processor.datasource.pojo.TableEntity;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
+import com.cn.jmw.processor.datasource.factory.DataSourceConnectionPool;
+import com.cn.jmw.processor.datasource.pojo.*;
 import com.alibaba.druid.pool.DruidDataSource;
-import org.apache.commons.lang3.StringUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.dbutils.QueryRunner;
 import org.apache.commons.dbutils.ResultSetHandler;
+import org.apache.commons.lang3.StringUtils;
 
 import java.sql.*;
 import java.util.*;
@@ -24,7 +23,15 @@ import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
  * 该类提供构造函数以初始化与数据库的连接参数，如主机名、端口、数据库名、用户名和密码。
  * </p>
  */
-public abstract class JDBCAdapter extends Database implements SQLDatabaseQuery {
+@Slf4j
+public abstract class JDBCAdapter extends Database implements
+        // DQL
+        SQLDatabaseQuery,
+        // DDL
+        SQLCommand,
+        // 公共系统命令语言 SCL
+        SystemCommandLanguage {
+
     public QueryRunner runner; // 用于执行SQL查询的QueryRunner实例
     public static DataSourceConnectionPool pool = DataSourceConnectionPool.getInstance(); // 数据源连接池实例
 
@@ -176,16 +183,42 @@ public abstract class JDBCAdapter extends Database implements SQLDatabaseQuery {
      * @throws SQLException 如果数据库访问错误或其他错误
      */
     @Override
-    public List<Map<String, Object>> queryBatch(String sql, Object[] params) throws SQLException {
+    public List<Map<String, Object>> executeDMLC(String sql, Object[] params) throws SQLException {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    /**
+     * 执行批量查询操作，尚未实现。
+     *
+     * @param sql 要执行的SQL查询语句
+     * @param params 查询参数数组，可能为null
+     * @return boolean
+     * @throws SQLException 如果数据库访问错误或其他错误
+     */
+    @Override
+    public int executeDMLRUD(String sql, Object[] params) throws SQLException{
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    /**
+     * 执行批量查询操作，尚未实现。
+     *
+     * @param sql 要执行的SQL查询语句
+     * @param params 查询参数数组，可能为null
+     * @return boolean
+     * @throws SQLException 如果数据库访问错误或其他错误
+     */
+    @Override
+    public void executeDDL(String sql, Object[] params) throws SQLException{
         throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
     }
 
     /**
      * 使用流执行查询操作。
      *
-     * @param sql    要执行的SQL查询语句
+     * @param sql     要执行的SQL查询语句
      * @param handler 处理结果集的处理器
-     * @param <T>    返回类型
+     * @param <T>     返回类型
      * @return 查询结果，由ResultSetHandler处理
      * @throws SQLException 如果数据库访问错误或其他错误
      */
@@ -223,5 +256,181 @@ public abstract class JDBCAdapter extends Database implements SQLDatabaseQuery {
     @Override
     public DatabaseEnum getDatabaseType() {
         throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    /**
+     * 获取创建表的DDL语句，尚未实现。
+     *
+     * @return
+     */
+    @Override
+    public ShowCreateTable getCreateTableDDL(String dbName, String table) {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+
+    public Map<String, ShowTableStatusResult> showTableStatus(){
+        return showTableStatus(null);
+    }
+
+    /**
+     * 获取表的结构信息
+     *
+     * @param tableName 表名
+     * @return
+     */
+    @Override
+    public Map<String, ShowTableStatusResult> showTableStatus(String tableName) {
+        Map<String, ShowTableStatusResult> showTableStatusResults = new HashMap<>();
+        String sql = "SHOW TABLE STATUS";
+        if (StringUtils.isNotBlank(tableName)) {
+            sql = sql + " WHERE Name = ?";
+        }
+
+        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+             PreparedStatement statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+
+            if (StringUtils.isNotBlank(tableName)) {
+                statement.setString(1, tableName);
+            }
+            statement.setFetchSize(Integer.MIN_VALUE); // Important setting for MySQL streaming queries
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    ShowTableStatusResult result = ShowTableStatusResult.builder()
+                            .name(resultSet.getString("Name"))
+                            .engine(resultSet.getString("Engine"))
+                            .version(resultSet.getString("Version"))
+                            .rowFormat(resultSet.getString("Row_format"))
+                            .rows(resultSet.getLong("Rows"))
+                            .avgRowLength(resultSet.getLong("Avg_row_length"))
+                            .dataLength(resultSet.getLong("Data_length"))
+                            .maxDataLength(resultSet.getLong("Max_data_length"))
+                            .indexLength(resultSet.getLong("Index_length"))
+                            .dataFree(resultSet.getLong("Data_free"))
+                            .autoIncrement(resultSet.getLong("Auto_increment"))
+                            .createTime(resultSet.getString("Create_time"))
+                            .updateTime(resultSet.getString("Update_time"))
+                            .checkTime(resultSet.getString("Check_time"))
+                            .collation(resultSet.getString("Collation"))
+                            .checksum(resultSet.getString("Checksum"))
+                            .createOptions(resultSet.getString("Create_options"))
+                            .comment(resultSet.getString("Comment"))
+                            .build();
+
+                    showTableStatusResults.put(result.getName(), result);
+                }
+            }
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
+        return showTableStatusResults;
+    }
+
+    @Override
+    public boolean dataTableThresholdDeterminationCleaning(List<String> tableNames, List<Double> limitSizes, List<String> sortTimeFields, double threshold) {
+        log.info("——————————————————————————————————————————————数据表阈值清理———————————————————————————————————————————————");
+        //showTableStatus,获取到所有表的信息关于，curSizes当前大小 rowsCounts行数
+        Map<String, ShowTableStatusResult> stringShowTableStatusResultMap = showTableStatus();
+
+        for (int i = 0; i < tableNames.size(); i++) {
+            //表名
+            String tableName = tableNames.get(i);
+            //限制GB
+            Double limitSize = limitSizes.get(i);
+            //阈值之下
+            double allowSize = (double) (limitSize * threshold);
+            //排序时间字段
+            String sortTimeField = sortTimeFields.get(i);
+
+            //curSizes当前大小 rowsCounts行数
+            ShowTableStatusResult showTableStatusResult = stringShowTableStatusResultMap.get(tableName);
+            if (showTableStatusResult==null){
+                log.info("数据表阈值清理————表名: {}, 失效表", tableName);
+                continue;
+            }
+            //curSizes当前大小
+            double curSizes = showTableStatusResult.getDataLength();
+            //curSizes当前大小要做计算从b换算成GB
+            curSizes = curSizes / 1024 / 1024 / 1024;
+            //avgRowSize平均数据大小
+            Long avgRowSize = showTableStatusResult.getAvgRowLength();
+
+            //阈值之下就通过
+            if (curSizes < allowSize) {
+                //日志打印
+                log.info("数据表阈值清理————表名: {}, 当前大小: {}GB, 允许大小: {}GB", tableName, curSizes, allowSize);
+                continue;
+            }
+
+            int earliestAndLatestDays = getEarliestAndLatestDays(sortTimeField, tableName);
+
+            /**
+             * SELECT *
+             * FROM bds_asset_info
+             * WHERE DATE(create_time) = DATE_ADD((SELECT DATE(MIN(create_time)) FROM bds_asset_info), INTERVAL 1 DAY)
+             * ORDER BY create_time ASC;
+             */
+            String sqlQuery = "DELETE FROM %s \n" +
+                    "WHERE DATE(%s) BETWEEN DATE_ADD((SELECT DATE(MIN(%s)) FROM %s), INTERVAL 0 DAY) \n" +
+                    "AND DATE_ADD((SELECT DATE(MIN(%s)) FROM %s), INTERVAL %d DAY);";
+
+            String sqlCount = "SELECT COUNT(*) AS COUNT \n" +
+                    "FROM %s \n" +
+                    "WHERE DATE(%s) = DATE_ADD((SELECT DATE(MIN(%s)) FROM %s), INTERVAL %d DAY);";
+
+            int n = 0;
+            double newCurSizes = curSizes;
+            while (newCurSizes > allowSize && n <= earliestAndLatestDays){
+                sqlCount = String.format(sqlCount, tableName, sortTimeField, sortTimeField, tableName, n);
+
+                try {
+                    List<Map<String, Object>> countResult = executeDMLC(sqlCount, null);
+                    double COUNT = countResult.isEmpty() ? 0 : (Long)countResult.get(0).get("COUNT");
+                    newCurSizes = newCurSizes - ((COUNT * avgRowSize)/ 1024 / 1024 / 1024);
+
+                    if (newCurSizes < allowSize) {
+                        log.info("数据表阈值清理————正在处理表: {}, 当前天数: {}, 计数: {}条, 新大小: {}GB", tableName, n, COUNT, newCurSizes);
+                        //跳出去之前需要delete
+                        sqlQuery = String.format(sqlQuery, tableName, sortTimeField, sortTimeField, tableName, sortTimeField, tableName, n);
+                        int numberOfSuccessfulDMLExecutions = executeDMLRUD(sqlQuery, null);
+                        log.info("数据表阈值清理————表名: {}, 删除操作已执行, 受影响行数: {}行", tableName, numberOfSuccessfulDMLExecutions);
+                        break;
+                    }
+                } catch (SQLException e) {
+                    log.error("数据表阈值清理————处理表: {}, 当前天数: {}, 异常信息: {}", tableName, n, e.getMessage());
+                    log.info("————————————————————————————————————————————————————————————————————————————————————————————————————————");
+                    throw new RuntimeException(e);
+                }
+                n++;
+            }
+        }
+        log.info("————————————————————————————————————————————————————————————————————————————————————————————————————————");
+        return true;
+    }
+
+    /**
+     * 计算当前数据库中最早和最迟进入库中的数据天数差
+     *
+     * @param tableName 表名称
+     * @param sortTimeField 排序字段
+     * @return 最早和最迟进入库中的数据天数差
+     */
+    @Override
+    public int getEarliestAndLatestDays(String tableName,String sortTimeField) {
+        String dayDiffQuery = "SELECT DATEDIFF(MAX(" + sortTimeField + "), MIN(" + sortTimeField + ")) AS dayDiff FROM " + tableName;
+
+        int maxDays = 0;
+        try {
+            List<Map<String, Object>> result = executeDMLC(dayDiffQuery, null);
+            if (!result.isEmpty()) {
+                maxDays = (Integer) result.get(0).get("dayDiff");
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return maxDays;
     }
 }

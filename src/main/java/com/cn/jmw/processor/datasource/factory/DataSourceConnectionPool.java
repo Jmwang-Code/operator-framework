@@ -1,6 +1,7 @@
 package com.cn.jmw.processor.datasource.factory;
 
 import com.alibaba.druid.pool.DruidDataSource;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
@@ -15,11 +16,13 @@ import java.util.Map;
  */
 public class DataSourceConnectionPool {
     //连接池
-    private static DataSourceConnectionPool instance;
+    private static volatile  DataSourceConnectionPool instance;
     //德鲁伊数据源缓存池
     private final Map<String, DruidDataSource> dataSourceMap;
     //连接缓存池
     private final Map<String, Connection> connectionMap;
+
+    private static final int DEFAULT_POOL_SIZE = 16;
 
     /**
      * 私有构造函数，用于初始化数据源和连接缓存池。
@@ -32,10 +35,10 @@ public class DataSourceConnectionPool {
      */
     private DataSourceConnectionPool() {
         this.dataSourceMap = new LinkedHashMap<>();
-        this.connectionMap = new LinkedHashMap<String, Connection>(16, 1.0f, true) {
+        this.connectionMap = new LinkedHashMap<String, Connection>(DEFAULT_POOL_SIZE, 1.0f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, Connection> eldest) {
-                boolean shouldRemove = size() > 16;
+                boolean shouldRemove = size() > DEFAULT_POOL_SIZE; // 使用默认大小或传入的大小
                 if (shouldRemove) {
                     try {
                         eldest.getValue().close();
@@ -49,13 +52,63 @@ public class DataSourceConnectionPool {
     }
 
     /**
+     * 私有构造函数，用于初始化数据源和连接缓存池。
+     * <p>
+     * 使用LinkedHashMap来管理连接，最近访问的连接将被移动到队列的尾部。
+     * </p>
+     *
+     * 热点连接（最近访问的连接）会被移动到队列的尾部，而冷点连接（最近最少访问的连接）会被移动到队列的头部。
+     * 当队列满了，最老的元素（也就是队列头部的元素）会被移除，并且对应的数据库连接会被关闭。
+     * @param poolSize 连接池大小
+     */
+    private DataSourceConnectionPool(int poolSize) {
+        this.dataSourceMap = new LinkedHashMap<>();
+        this.connectionMap = new LinkedHashMap<String, Connection>(poolSize, 1.0f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Connection> eldest) {
+                boolean shouldRemove = size() > DEFAULT_POOL_SIZE; // 使用默认大小或传入的大小
+                if (shouldRemove) {
+                    try {
+                        eldest.getValue().close();
+                    } catch (SQLException e) {
+                        throw new RuntimeException("Failed to close connection", e);
+                    }
+                }
+                return shouldRemove;
+            }
+        };
+    }
+
+
+    /**
      * 获取数据源连接池的唯一实例。
      *
      * @return 单例的DataSourceConnectionPool实例
      */
     public static synchronized DataSourceConnectionPool getInstance() {
         if (instance == null) {
-            instance = new DataSourceConnectionPool();
+            synchronized (DataSourceConnectionPool.class) {
+                if (instance == null) {
+                    instance = new DataSourceConnectionPool();
+                }
+            }
+        }
+        return instance;
+    }
+
+    /**
+     * 获取数据源连接池的唯一实例。
+     *
+     * @param poolSize 连接池大小
+     * @return 单例的DataSourceConnectionPool实例
+     */
+    public static synchronized DataSourceConnectionPool getInstance(int poolSize) {
+        if (instance == null) {
+            synchronized (DataSourceConnectionPool.class) {
+                if (instance == null) {
+                    instance = new DataSourceConnectionPool(poolSize);
+                }
+            }
         }
         return instance;
     }
@@ -88,12 +141,18 @@ public class DataSourceConnectionPool {
         if (dataSource == null) {
             throw new SQLException("No available DataSource with id: " + id);
         }
-        Connection connection = connectionMap.get(id);
-        if (connection == null || connection.isClosed()) {
-            connection = dataSource.getConnection();
-            connectionMap.put(id, connection);
+
+        synchronized (this) {
+            Connection connection = connectionMap.get(id);
+            if (connection == null || connection.isClosed()) {
+                if (connection != null && connection.isClosed()) {
+                    connectionMap.remove(id);
+                }
+                connection = dataSource.getConnection();
+                connectionMap.put(id, connection);
+            }
+            return connection;
         }
-        return connection;
     }
 
     /**
@@ -117,8 +176,13 @@ public class DataSourceConnectionPool {
      */
     public void closeAllConnections() throws SQLException {
         for (Connection connection : connectionMap.values()) {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
+            try {
+                if (connection != null && !connection.isClosed()) {
+                    connection.close();
+                }
+            } catch (SQLException e) {
+                // 记录异常并继续
+                e.printStackTrace();
             }
         }
         connectionMap.clear();

@@ -4,7 +4,6 @@ package com.cn.jmw.processor.datasource.jdbc.dialect.pojo;
 import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLOperatorEnum;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class QueryConditionBuilder {

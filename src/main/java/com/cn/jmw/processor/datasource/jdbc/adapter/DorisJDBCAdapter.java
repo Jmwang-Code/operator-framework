@@ -3,17 +3,16 @@ package com.cn.jmw.processor.datasource.jdbc.adapter;
 import com.cn.jmw.processor.datasource.JDBCAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.enums.FileTypeEnum;
-import com.cn.jmw.processor.datasource.export.ASynExport;
-import com.cn.jmw.processor.datasource.export.SynExport;
 import com.cn.jmw.processor.datasource.factory.DatabaseAdapterFactory;
 import com.cn.jmw.processor.datasource.instantiation.Instantiation;
-import com.cn.jmw.processor.datasource.jdbc.adapter.pojo.IntoOutFile;
-import com.cn.jmw.processor.datasource.jdbc.adapter.pojo.ShowExport;
 import com.cn.jmw.processor.datasource.jdbc.dialect.Dialect;
 import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
-import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;
-import com.cn.jmw.processor.datasource.pojo.StreamLoadResult;
+import com.cn.jmw.processor.datasource.jdbc.inter.Doris;
+import com.cn.jmw.processor.datasource.jdbc.inter.export.ASynExport;
+import com.cn.jmw.processor.datasource.jdbc.inter.export.SynExport;
+import com.cn.jmw.processor.datasource.pojo.*;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -35,6 +34,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpHeaders;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPut;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.FileEntity;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultRedirectStrategy;
@@ -42,6 +43,7 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
@@ -50,9 +52,22 @@ import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
+
+
 
 @Slf4j
-public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiation, SynExport, ASynExport {
+public class DorisJDBCAdapter extends JDBCAdapter implements
+        //方言-SQL生成器
+        Dialect,
+        //实例化-表实例化POJO
+        Instantiation,
+        //同步导出
+        SynExport,
+        //异步导出
+        ASynExport,
+        //Doris特性功能 比如StreamLoad、RoutineLoad
+        Doris {
 
     // DORIS HTTP PORT
     private static final int DORIS_HTTP_PORT = 8030;
@@ -90,9 +105,47 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
      * @return 查询结果，返回一个Map列表
      * @throws SQLException 如果发生SQL错误
      */
-    public List<Map<String, Object>> queryBatch(String sql, Object[] params) throws SQLException {
+    public List<Map<String, Object>> executeDMLC(String sql, Object[] params) throws SQLException {
         return super.runner.query(pool.getConnection(hostname + port + databaseName), sql, new MapListHandler(), params);
     }
+
+    /**
+     * 执行批量查询操作，尚未实现。
+     *
+     * @param sql    要执行的SQL查询语句
+     * @param params 查询参数数组，可能为null
+     * @return boolean
+     * @throws SQLException 如果数据库访问错误或其他错误
+     */
+    @Override
+    public int executeDMLRUD(String sql, Object[] params) throws SQLException {
+        return super.runner.update(pool.getConnection(hostname + port + databaseName), sql, params);
+    }
+
+    /**
+     * 执行批量查询操作，尚未实现。
+     *
+     * @param sql    要执行的SQL查询语句
+     * @param params 查询参数数组，可能为null
+     * @return boolean
+     * @throws SQLException 如果数据库访问错误或其他错误
+     */
+    @Override
+    public void executeDDL(String sql, Object[] params) throws SQLException {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            // Set parameters if any
+            if (params != null) {
+                for (int i = 0; i < params.length; i++) {
+                    statement.setObject(i + 1, params[i]);
+                }
+            }
+            statement.execute();
+        } catch (SQLException e) {
+            throw new SQLException("Error executing DDL: " + e.getMessage(), e);
+        }
+    }
+
 
     @Override
     public List<String> getIgnoreDatabaseList() {
@@ -140,13 +193,16 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
 
     /**
      * 使用流加载将数据加载到 Doris 中。
+     * <h1>不推荐直接使用streamLoad，而是使用streamLoadBatch</h1>
      *
-     * @param json      要加载的 JSON 数据
+     * @param data      要加载的 JSON 数据 / CSV 路径 / ORC 路径 / Parquet 路径
      * @param tableName 要将数据加载到其中的表的名称
      * @param columns   列的名称关系
      * @throws IOException 如果发生 IO 错误
      */
-    private StreamLoadResult streamLoad(String json, String tableName, String columns) throws IOException {
+    @Deprecated //不推荐直接使用streamLoad，而是使用streamLoadBatch
+    @Override
+    public StreamLoadResult streamLoad(String data, String tableName, String columns, FileTypeEnum importFileType) throws IOException {
         String url = "http://" + super.hostname + ":" + DORIS_HTTP_PORT + "/api/" + super.databaseName + "/" + tableName + "/_stream_load";
 
         String loadResult = "";
@@ -162,8 +218,9 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
                     calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH) + 1, calendar.get(Calendar.DAY_OF_MONTH),
                     calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE), calendar.get(Calendar.SECOND),
                     UUID.randomUUID().toString().replaceAll("-", ""));
+
             //指定导入数据格式 csv, json, arrow, csv_with_names
-            put.setHeader("format", "json");
+            put.setHeader("format", importFileType.getName());
             // 用于指定 Doris 该次导入的标签，标签相同的数据无法多次导入
             put.setHeader("label", label);
             // 用于指定导入文件中的列分隔符
@@ -185,9 +242,36 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
             }
 
             // 设置导入文件。
-            // 这里也可以使用 StringEntity 来传输任意数据。
-            StringEntity entity = new StringEntity(json, StandardCharsets.UTF_8);
-            put.setEntity(entity);
+            switch (importFileType) {
+                case FileTypeEnum.CSV_WITH_NAMES: {
+                    File file = new File(data); // data应该是CSV文件的路径
+                    FileEntity entity = new FileEntity(file, ContentType.create("text/csv", StandardCharsets.UTF_8));
+                    put.setEntity(entity);
+                    break;
+                }
+                case FileTypeEnum.JSON: {
+                    // 这里也可以使用 StringEntity 来传输任意数据。
+                    StringEntity entity = new StringEntity(data, StandardCharsets.UTF_8);
+                    put.setEntity(entity);
+                    break;
+                }
+                case FileTypeEnum.ORC: {
+                    File orcFile = new File(data); // data应为ORC文件的路径
+                    FileEntity orcEntity = new FileEntity(orcFile, ContentType.create("application/octet-stream"));
+                    put.setEntity(orcEntity);
+                    break;
+                }
+                case FileTypeEnum.PARQUET: {
+                    File parquetFile = new File(data); // data应为Parquet文件的路径
+                    FileEntity parquetEntity = new FileEntity(parquetFile, ContentType.create("application/octet-stream"));
+                    put.setEntity(parquetEntity);
+                    break;
+                }
+                default: {
+                    //https://doris.apache.org/zh-CN/docs/data-operate/import/stream-load-manual
+                    throw new IOException("不支持的数据格式");
+                }
+            }
 
             try (CloseableHttpResponse response = client.execute(put)) {
                 if (response.getEntity() != null) {
@@ -207,6 +291,268 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
         StreamLoadResult streamLoadResult = objectMapper.readValue(loadResult, StreamLoadResult.class);
 
         return streamLoadResult;
+    }
+
+    @Override
+    public boolean createRoutineLoad(String databaseName, String routineLoadName, String targetTableName,
+                                     String columnsTerminatedBy, String columns, String kafkaBrokerList,
+                                     String kafkaTopic, String groupId, String kafkaPartitions,
+                                     String kafkaOffsets, FileTypeEnum fileTypeEnum) {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+             Statement statement = connection.createStatement()) {
+            StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder.append("CREATE ROUTINE LOAD ").append(databaseName + "." + routineLoadName + " ON " + targetTableName + "\n");
+
+            //如果是JSON
+            if (FileTypeEnum.CSV_WITH_NAMES == fileTypeEnum && StringUtils.isNotBlank(columnsTerminatedBy)) {
+                stringBuilder.append("COLUMNS TERMINATED BY \"" + columnsTerminatedBy + "\",\n");
+            }
+
+            if (StringUtils.isNotBlank(columns)) {
+                stringBuilder.append("COLUMNS(" + columns + ")\n");
+            }
+
+            //如果是JSON
+            if (FileTypeEnum.JSON == fileTypeEnum) {
+                stringBuilder.append("PROPERTIES(");
+                stringBuilder.append("\"format\"=\"" + fileTypeEnum.getName() + "\",\n");
+                stringBuilder.append("\"max_error_number\" = \"9999999999\",\n");
+                stringBuilder.append("\"jsonpaths\"=\"" + parseColumns(columns, columnsTerminatedBy) + "\"\n");
+                stringBuilder.append(")\n");
+            }
+
+            //KAFKA配置项
+            stringBuilder.append("FROM KAFKA(\n")
+                    /**
+                     * 考虑包装起来，从入参到内部参数
+                     *
+                     * 访问 SSL 认证的 Kafka 集群 property 参数示例
+                     * "property.security.protocol" = "ssl",
+                     * "property.ssl.ca.location" = "FILE:ca.pem",
+                     * "property.ssl.certificate.location" = "FILE:client.pem",
+                     * "property.ssl.key.location" = "FILE:client.key",
+                     * "property.ssl.key.password" = "ssl_passwd"
+                     *
+                     * 访问 PLAIN 认证的 Kafka 集群 property 参数示例
+                     * "property.security.protocol"="SASL_PLAINTEXT",
+                     * "property.sasl.mechanism"="PLAIN",
+                     * "property.sasl.username"="admin",
+                     * "property.sasl.password"="admin_passwd"
+                     *
+                     * 访问 Kerberos 认证的 Kafka 集群 property 参数示例
+                     * "property.security.protocol" = "SASL_PLAINTEXT",
+                     * "property.sasl.kerberos.service.name" = "kafka",
+                     * "property.sasl.kerberos.keytab" = "/etc/krb5.keytab",
+                     * "property.sasl.kerberos.principal" = "doris@YOUR.COM"
+                     */
+                    .append("\"kafka_broker_list\"=\"" + kafkaBrokerList + "\",\n")
+                    .append("\"kafka_topic\"=\"" + kafkaTopic + "\",\n")
+                    .append("\"kafka_group\"=\"" + groupId + "\",\n")
+                    .append("\"kafka_partitions\"=\"" + kafkaPartitions + "\",\n")
+                    .append("\"kafka_offsets\"=\"" + kafkaOffsets + "\"\n")
+                    .append(");");
+
+            return statement.execute(stringBuilder.toString());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * @param columns 字段多个用逗号隔开
+     * @return
+     * @throws JsonProcessingException
+     */
+    public static String parseColumns(String columns, String columnsTerminatedBy) throws JsonProcessingException {
+        List<String> collect = Arrays.stream(columns.split(columnsTerminatedBy))
+                .map(column -> "$." + column)  // 添加转义引号
+                .collect(Collectors.toList());
+        // 使用 ObjectMapper 将 List<String> 转换为 JSON 字符串
+        ObjectMapper objectMapper = new ObjectMapper();
+        String json = objectMapper.writeValueAsString(collect);
+
+        // 如果需要在 Java 字符串中表示这个 JSON 字符串字面量（包含转义的双引号）
+        // 则需要对双引号进行转义
+        String jsonStringLiteral = json.replace("\"", "\\\"");
+
+        // 注意：此时 jsonStringLiteral 不是一个有效的 JSON 字符串，
+        // 它只是一个在 Java 字符串中表示 JSON 字符串字面量的字符串。
+        // 如果您直接打印它，它将显示为转义后的形式。
+        return jsonStringLiteral;
+    }
+
+    @Override
+    public List<RoutineLoadResult> showRoutineLoadFor(String routineLoadName) {
+        List<RoutineLoadResult> routineLoadResults = new ArrayList<>();
+        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+             Statement statement = connection.createStatement()) {
+            StringBuilder stringBuilder = new StringBuilder();
+            if (StringUtils.isBlank(routineLoadName)) {
+                stringBuilder.append("SHOW ROUTINE LOAD");
+            } else {
+                stringBuilder.append("SHOW ROUTINE LOAD FOR ").append(routineLoadName + ";");
+            }
+            ResultSet resultSet = statement.executeQuery(stringBuilder.toString());
+            while (resultSet.next()) {
+                RoutineLoadResult result = RoutineLoadResult.builder()
+                        .id(resultSet.getLong("Id"))
+                        .name(resultSet.getString("Name"))
+                        .createTime(resultSet.getString("CreateTime"))
+                        .pauseTime(resultSet.getString("PauseTime"))
+                        .endTime(resultSet.getString("EndTime"))
+                        .dbName(resultSet.getString("DbName"))
+                        .tableName(resultSet.getString("TableName"))
+                        .isMultiTable(resultSet.getBoolean("IsMultiTable"))
+                        .state(resultSet.getString("State"))
+                        .dataSourceType(resultSet.getString("DataSourceType"))
+                        .currentTaskNum(resultSet.getInt("CurrentTaskNum"))
+                        .jobProperties(resultSet.getString("JobProperties"))
+                        .dataSourceProperties(resultSet.getString("DataSourceProperties"))
+                        .customProperties(resultSet.getString("CustomProperties"))
+                        .statistic(resultSet.getString("Statistic"))
+                        .progress(resultSet.getString("Progress"))
+                        .lag(resultSet.getString("Lag"))
+                        .reasonOfStateChanged(resultSet.getString("ReasonOfStateChanged"))
+                        .errorLogUrls(resultSet.getString("ErrorLogUrls"))
+                        .otherMsg(resultSet.getString("OtherMsg"))
+                        .user(resultSet.getString("User"))
+                        .comment(resultSet.getString("Comment"))
+                        .build();
+
+                routineLoadResults.add(result);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return routineLoadResults;
+    }
+
+    @Override
+    public boolean determineCleaningBasedOnPartitionDataTableThreshold(List<String> DBNames, List<String> tableNames, List<Double> limitSizes, List<String> sortTimeFields, double threshold) {
+        log.info("——————————————————————————————————————————————数据表阈值清理———————————————————————————————————————————————");
+
+        //showTableStatus,获取到所有表的信息关于，curSizes当前大小 rowsCounts行数
+        Map<String, ShowTableStatusResult> stringShowTableStatusResultMap = showTableStatus();
+
+        //showPartitions,获取到所有表的信息关于，curSizes当前大小 rowsCounts行数
+        for (int i = 0; i < tableNames.size(); i++) {
+            //库名
+            String DBName = DBNames.get(i);
+            //表名
+            String tableName = tableNames.get(i);
+            //限制GB
+            Double limitSize = limitSizes.get(i);
+            //阈值之下
+            double allowSize = (double) (limitSize * threshold);
+            //排序时间字段
+            String sortTimeField = sortTimeFields.get(i);
+
+            //查询Partition按照时间有多少个
+            List<ShowPartitionResult> showPartitionResults = showPartitions(DBName, tableName, sortTimeField);
+            if (showPartitionResults == null) {
+                log.info("数据表阈值清理————表名: {}, 失效表", tableName);
+                continue;
+            }
+
+            if (showPartitionResults.size() < 2){
+                log.info("数据表阈值清理————表名: {}, 分区不存在或者分区数量达不到清理最小值2", tableName);
+                continue;
+            }
+
+            //curSizes当前大小 rowsCounts行数
+            ShowPartitionResult showPartitionResult = showPartitionResults.get(0);
+            String partitionName = showPartitionResult.getPartitionName();
+            String partitionKey = showPartitionResult.getPartitionKey();
+            if (partitionKey == null || !partitionKey.equals(sortTimeField)) {
+                log.info("数据表阈值清理————表名: {}, 分区字段不正确: {}", tableName, partitionKey);
+                continue;
+            }
+            ShowTableStatusResult showTableStatusResult = stringShowTableStatusResultMap.get(tableName);
+            if (showTableStatusResult == null) {
+                log.info("数据表阈值清理————表名: {}, 失效表", tableName);
+                continue;
+            }
+            //curSizes当前大小
+            double curSizes = showTableStatusResult.getDataLength();
+            //curSizes当前大小要做计算从b换算成GB
+            curSizes = curSizes / 1024 / 1024 / 1024;
+            //avgRowSize平均数据大小
+            Long avgRowSize = showTableStatusResult.getAvgRowLength();
+
+            //阈值之下就通过
+            if (curSizes < allowSize) {
+                //日志打印
+                log.info("数据表阈值清理————表名: {}, 当前大小: {}GB, 允许大小: {}GB", tableName, curSizes, allowSize);
+                continue;
+            }
+
+            /**
+             * alter table bds_linux_history_log drop partition p20240701000000
+             */
+            String sqlDelete = "alter table %s.%s drop partition %s;";
+
+            double newCurSizes = curSizes;
+            while (newCurSizes > allowSize) {
+                    sqlDelete = String.format(DBName, tableName, partitionName);
+
+                try {
+                    executeDDL(sqlDelete, null);
+                    log.info("数据表阈值清理————正在处理表: {}", tableName);
+                    executeDDL("drop "+DBName+"/"+tableName+"/"+partitionName, null);
+                } catch (SQLException e) {
+                    log.error("数据表阈值清理————处理表: {},  异常信息: {}", tableName, e.getMessage());
+                    log.info("————————————————————————————————————————————————————————————————————————————————————————————————————————");
+//                    throw new RuntimeException(e);
+                    return false;
+                }
+            }
+        }
+
+        log.info("————————————————————————————————————————————————————————————————————————————————————————————————————————");
+        return true;
+    }
+
+    @Override
+    public List<ShowPartitionResult> showPartitions(String dbName, String tableName, String sortTimeField) {
+        List<ShowPartitionResult> partitions = new ArrayList<>();
+        String sql = "SHOW PARTITIONS FROM " + dbName + "." + tableName + " ORDER BY PartitionName ASC";
+
+        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    ShowPartitionResult partition = ShowPartitionResult.builder()
+                            .partitionId(resultSet.getLong("PartitionId"))
+                            .partitionName(resultSet.getString("PartitionName"))
+                            .visibleVersion(resultSet.getInt("VisibleVersion"))
+                            .visibleVersionTime(resultSet.getString("VisibleVersionTime"))
+                            .state(resultSet.getString("State"))
+                            .partitionKey(resultSet.getString("PartitionKey"))
+                            .range(resultSet.getString("Range"))
+                            .distributionKey(resultSet.getString("DistributionKey"))
+                            .buckets(resultSet.getInt("Buckets"))
+                            .replicationNum(resultSet.getInt("ReplicationNum"))
+                            .storageMedium(resultSet.getString("StorageMedium"))
+                            .cooldownTime(resultSet.getString("CooldownTime"))
+                            .remoteStoragePolicy(resultSet.getString("RemoteStoragePolicy"))
+                            .lastConsistencyCheckTime(resultSet.getString("LastConsistencyCheckTime"))
+                            .dataSize(resultSet.getString("DataSize"))
+                            .isInMemory(resultSet.getBoolean("IsInMemory"))
+                            .replicaAllocation(resultSet.getString("ReplicaAllocation"))
+                            .isMutable(resultSet.getBoolean("IsMutable"))
+                            .syncWithBaseTables(resultSet.getBoolean("SyncWithBaseTables"))
+                            .unsyncTables(resultSet.getString("UnsyncTables"))
+                            .build();
+
+                    partitions.add(partition);
+                }
+            }
+        } catch (SQLException e) {
+            log.error("数据表阈值清理————表名: {} ,showPartitions异常信息: {}",tableName, e.getMessage());
+        }
+
+        return partitions;
     }
 
     /**
@@ -243,7 +589,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
      * @return StreamLoadResult数组
      * @throws IOException 如果发生 IO 错误
      */
-    public StreamLoadResult[] streamLoadBatch(List<?> list, String tableName, int size, String columns) throws IOException {
+    public StreamLoadResult[] streamLoadBatch(List<?> list, String tableName, int size, String columns, FileTypeEnum importFileType) throws IOException {
         int total = list.size();
         if (list == null || total == 0) {
             return new StreamLoadResult[0];
@@ -255,13 +601,13 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
         int start = 0;
         for (int i = 0; i < batch; i++) {
             List<?> subList = list.subList(start, start + size);
-            StreamLoadResult streamLoadResult = streamLoad(listToJson(subList), tableName, columns);
+            StreamLoadResult streamLoadResult = streamLoad(listToJson(subList), tableName, columns, importFileType);
             results[i] = streamLoadResult;
             start += size;
         }
         if (remainder > 0) {
             List<?> subList = list.subList(start, start + remainder);
-            StreamLoadResult streamLoadResult = streamLoad(listToJson(subList), tableName, columns);
+            StreamLoadResult streamLoadResult = streamLoad(listToJson(subList), tableName, columns, importFileType);
             results[batch] = streamLoadResult;
         }
 
@@ -269,13 +615,8 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
     }
 
     @Override
-    public String getDialectSQL(SQLQueryBuilder queryBuilder) {
-        long l = System.currentTimeMillis();
-        String sql = queryBuilder.buildSQL();
-        log.info("执行耗时：" + (System.currentTimeMillis() - l) + "ms");
-        System.out.println();
-        System.out.println(sql);
-        return sql;
+    public String buildSQL(SQLQueryBuilder queryBuilder) {
+        return queryBuilder.buildSQL();
     }
 
     @Override
@@ -359,7 +700,8 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
                     "  \"format\" = \"csv_with_names\",\n" +
                     "  \"column_separator\" = \",\",\n" +
                     "  \"line_delimiter\" = \"\\n\",\n" +
-                    "  \"max_file_size\" = \"2GB\"\n" +
+                    "  \"max_file_size\" = \"2GB\",\n" +
+                    "  \"with_bom\" = \"true\"\n" +
                     ");");
             statement.execute(sql.toString());
         } catch (Exception e) {
@@ -458,23 +800,30 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
     }
 
     @Override
-    public IntoOutFile synExport(String sql, String path, String maximumFileSize,FileTypeEnum fileTypeEnum) {
+    public IntoOutFile synExport(String sql, String path, String maximumFileSize, FileTypeEnum fileTypeEnum) {
+        StringBuilder SQLBuilder = new StringBuilder();
         //是否开头是以select开头的
         if (sql.toLowerCase().startsWith("select")) {
-            //将前六个字符替换成?
-            sql = "SELECT /*+ SET_VAR(query_timeout = 300, enable_partition_cache=false) */ " + sql.substring(6);
-        }else {
-            sql = sql.replace("select","SELECT /*+ SET_VAR(query_timeout = 300, enable_partition_cache=false) */ ");
+            SQLBuilder.append("SELECT /*+ SET_VAR(query_timeout = 300, enable_partition_cache=false) */ " + sql.substring(6));
+        } else {
+            SQLBuilder.append(sql.replace("select", "SELECT /*+ SET_VAR(query_timeout = 300, enable_partition_cache=false) */ "));
         }
+
+        SQLBuilder.append(" INTO OUTFILE \"file://").append(path + "\"\n")
+                .append("FORMAT AS " + fileTypeEnum + "\n")
+                .append("PROPERTIES(\n");
+
+        if (fileTypeEnum == fileTypeEnum.CSV_WITH_NAMES) {
+            SQLBuilder.append("\"column_separator\" = \",\",\n")
+                    .append("\"line_delimiter\" = \"\\n\",\n");
+        }
+
+        SQLBuilder.append("\"max_file_size\" = \"" + maximumFileSize + "\",\n")
+                .append("\"with_bom\" = \"true\"\n")
+                .append(");");
         try (Connection connection = pool.getConnection(hostname + port + databaseName);
              Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery(sql + " INTO OUTFILE \"file://" + path + "\"\n" +
-                     "FORMAT AS "+fileTypeEnum+"\n" +
-                     "PROPERTIES(\n" +
-                     "  \"column_separator\" = \",\",\n" +
-                     "  \"line_delimiter\" = \"\\n\",\n" +
-                     "  \"max_file_size\" = \""+maximumFileSize+"\"" +
-                     ");")) {
+             ResultSet resultSet = statement.executeQuery(SQLBuilder.toString())) {
             while (resultSet.next()) {
                 Integer fileNumber = resultSet.getInt("FileNumber");
                 Integer totalRows = resultSet.getInt("TotalRows");
@@ -498,6 +847,28 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
         return new IntoOutFile();
     }
 
+    @Override
+    public ShowCreateTable getCreateTableDDL(String dbName, String table) {
+        //通过语句查FE
+        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+             Statement statement = connection.createStatement()) {
+            String sql = "SHOW CREATE TABLE " + dbName + "." + table + ";";
+            ResultSet resultSet = statement.executeQuery(sql);
+            while (resultSet.next()) {
+                String createTableDDL = resultSet.getString("Create Table");
+                String tableCur = resultSet.getString("Table");
+                ShowCreateTable build = ShowCreateTable.builder()
+                        .create_table(createTableDDL)
+                        .table(tableCur)
+                        .build();
+                return build;
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return null;
+    }
+
     private static class FieldSettingImplementation implements Implementation {
         private final List<String> fieldNames;
         private final List<Class<?>> fieldTypes;
@@ -518,7 +889,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
                                 }
 
                                 @Override
-                                public Size apply(MethodVisitor methodVisitor, Implementation.Context implementationContext) {
+                                public Size apply(MethodVisitor methodVisitor, Context implementationContext) {
                                     for (int i = 0; i < fieldNames.size(); i++) {
                                         methodVisitor.visitVarInsn(Opcodes.ALOAD, 0); // 加载this
 
@@ -616,7 +987,18 @@ public class DorisJDBCAdapter extends JDBCAdapter implements Dialect, Instantiat
         JDBCConnectionEntity root = new JDBCConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "bds_log", "root", "123456aA!@");
 
         DorisJDBCAdapter adapter = DatabaseAdapterFactory.getAdapter(root, DorisJDBCAdapter.class);
-        Object instantiate = adapter.instantiate("bds_log", "bds_asset_info");
-        System.out.println(1);
+
+        List<String> DBNames = new ArrayList<>();
+        DBNames.add("bds_log");
+        List<String> tableNames = new ArrayList<>();
+        tableNames.add("bds_asset_info");
+        List<Double> limitSizes = new ArrayList<>();
+        limitSizes.add(0.002);
+        List<String> sortTimeFields = new ArrayList<>();
+        sortTimeFields.add("create_time");
+        double threshold = 0.9;
+        boolean b = adapter.determineCleaningBasedOnPartitionDataTableThreshold(DBNames, tableNames, limitSizes, sortTimeFields, threshold);
+        System.out.println(b);
+//        Object instantiate = adapter.instantiate("bds_log", "bds_asset_info");
     }
 }

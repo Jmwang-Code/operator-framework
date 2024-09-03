@@ -2,7 +2,10 @@ package com.cn.jmw.processor.datasource.pojo;
 
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.nosql.query.NoSQLQuery;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * JDBCConnectionEntity类用于表示JDBC连接的基本信息。
@@ -89,6 +92,11 @@ public class JDBCConnectionEntity {
      * 资产状态，表示当前资产的状态。
      */
     private short AssetStatus;
+
+    /**
+     * 清理阈值
+     */
+    private double threshold;
 
     /**
      * 构造函数用于创建JDBCConnectionEntity实例。

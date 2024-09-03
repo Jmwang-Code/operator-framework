@@ -3,6 +3,7 @@ package com.cn.jmw.processor.datasource.jdbc.adapter;
 import com.cn.jmw.processor.datasource.JDBCAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import org.apache.commons.dbutils.handlers.MapListHandler;
+
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;

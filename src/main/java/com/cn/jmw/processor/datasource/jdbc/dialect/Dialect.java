@@ -15,5 +15,5 @@ public interface Dialect {
      * @param queryBuilder 要转换为SQL字符串的SQLQueryBuilder实例。
      * @return 返回构建的SQL字符串，符合特定数据库的语法要求。
      */
-    public String getDialectSQL(SQLQueryBuilder queryBuilder);
+    public String buildSQL(SQLQueryBuilder queryBuilder);
 }

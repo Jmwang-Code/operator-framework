@@ -1,7 +1,6 @@
 package com.cn.jmw.processor.datasource.jdbc.dialect;
 
 import net.sf.jsqlparser.JSQLParserException;
-import net.sf.jsqlparser.expression.Alias;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
@@ -16,7 +15,6 @@ import net.sf.jsqlparser.statement.update.Update;
 import org.junit.Test;
 
 import java.util.*;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertFalse;
 

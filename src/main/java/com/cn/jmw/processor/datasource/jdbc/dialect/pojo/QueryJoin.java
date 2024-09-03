@@ -6,6 +6,8 @@ import org.jooq.DSLContext;
 import org.jooq.Table;
 import org.jooq.impl.DSL;
 
+import java.util.List;
+
 /**
  * QueryJoin类用于表示SQL查询中的连接操作。
  * <p>
@@ -60,14 +62,24 @@ public class QueryJoin {
      * @param create DSLContext对象，用于构建jOOQ表
      * @return jOOQ的Table对象，表示此连接的目标表
      */
-    public Table<?> toTable(DSLContext create) {
+    public Table<?> toTable(DSLContext create, List<Object> dataList) {
         if (subQuery != null) {
+            QuerySQLResult querySQLResult = subQuery.buildQuerySQLResult();
+            List<Object> dataListTemp = querySQLResult.getDataList();
+            dataList.addAll(dataListTemp);
             // 如果存在子查询，则创建子查询的表对象
-            return DSL.table("(" + subQuery.buildSQL() + ")").as(alias);
+            return DSL.table("(" + querySQLResult.getSql() + ")").as(alias);
         } else {
             // 否则，创建普通表的表对象
             return DSL.table(table).as(alias);
         }
+//        if (subQuery != null) {
+//            // 如果存在子查询，则创建子查询的表对象
+//            return DSL.table("(" + subQuery.buildSQL() + ")").as(alias);
+//        } else {
+//            // 否则，创建普通表的表对象
+//            return DSL.table(table).as(alias);
+//        }
     }
 
     /**

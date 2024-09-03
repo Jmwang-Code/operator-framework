@@ -1,10 +1,11 @@
 package com.cn.jmw.processor.datasource.pojo;
 
-import java.util.List;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.List;
 
 /**
  * DatabaseEntity类用于表示数据库的基本信息。

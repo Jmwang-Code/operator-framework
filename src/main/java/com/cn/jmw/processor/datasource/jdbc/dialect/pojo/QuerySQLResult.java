@@ -4,12 +4,24 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class QuerySQLResult{
+public class QuerySQLResult {
 
-    String sql;
-    Object[] data;
+    private String sql;
+//    临时获取到当前层的占位符数据集
+//    private Object[] data;
+    //当前层以及子层的占位符数据集（全部，包含当前层的占位符数据集）
+    private List<Object> dataList;
 
+    @Override
+    public String toString() {
+        return "QuerySQLResult{" +
+                "sql='" + sql + '\'' +
+                ", list=" + dataList +
+                '}';
+    }
 }

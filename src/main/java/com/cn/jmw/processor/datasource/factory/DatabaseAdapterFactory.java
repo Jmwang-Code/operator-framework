@@ -1,9 +1,9 @@
 package com.cn.jmw.processor.datasource.factory;
 
+import com.cn.jmw.processor.datasource.JDBCAdapter;
 import com.cn.jmw.processor.datasource.NoSqlAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.jdbc.adapter.*;
-import com.cn.jmw.processor.datasource.JDBCAdapter;
 import com.cn.jmw.processor.datasource.nosql.adapter.HiveJDBCAdapter;
 import com.cn.jmw.processor.datasource.nosql.adapter.MongoDBJDBCAdapter;
 import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;

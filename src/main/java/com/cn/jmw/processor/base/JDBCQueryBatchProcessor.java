@@ -13,6 +13,6 @@ public class JDBCQueryBatchProcessor extends BaseProcessor<JDBCConnectionEntity,
     @Override
     public List<Map<String, Object>> process(JDBCConnectionEntity input, Object... data) throws Exception {
         JDBCAdapter adapter = DatabaseAdapterFactory.getSQLAdapter(input);
-        return adapter.queryBatch(input.getSql(), input.getParams());
+        return adapter.executeDMLC(input.getSql(), input.getParams());
     }
 }

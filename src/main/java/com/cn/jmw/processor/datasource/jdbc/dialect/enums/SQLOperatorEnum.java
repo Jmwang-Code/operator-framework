@@ -19,6 +19,8 @@ public enum SQLOperatorEnum {
 
     MATCH_ANY("MATCH_ANY", "任意匹配"),
 
+    MATCH_ALL("MATCH_ALL", "全部匹配"),
+
     /**
      * 逻辑或操作符。
      */
