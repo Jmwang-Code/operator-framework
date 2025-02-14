@@ -42,6 +42,16 @@ public enum SQLOperatorEnum {
     NOT_EQUAL("!=", "不等于"),
 
     /**
+     * NULL
+     */
+    IS_NULL("IS NULL", "为空"),
+
+    /**
+     * NOT NULL
+     */
+    IS_NOT_NULL("IS NOT NULL", "不为空"),
+
+    /**
      * 大于操作符。
      */
     GT(">", "大于"),

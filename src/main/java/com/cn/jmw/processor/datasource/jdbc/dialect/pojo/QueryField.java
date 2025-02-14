@@ -1,5 +1,6 @@
 package com.cn.jmw.processor.datasource.jdbc.dialect.pojo;
 
+import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
 import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLFunctionEnum;
 import lombok.AllArgsConstructor;
 import lombok.Data;

@@ -2,18 +2,21 @@ package com.cn.jmw.processor.datasource.nosql.adapter;
 
 import com.cn.jmw.processor.datasource.NoSqlAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
-import com.cn.jmw.processor.datasource.nosql.query.NoSQLQuery;
 import com.cn.jmw.processor.datasource.pojo.ColumnEntity;
 import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
 import com.cn.jmw.processor.datasource.pojo.TableEntity;
+import com.cn.jmw.processor.datasource.nosql.query.NoSQLQuery;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import org.apache.commons.lang3.StringUtils;
 import org.bson.Document;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * MongoDBJDBCAdapter类用于适配MongoDB数据库连接。
@@ -82,41 +85,58 @@ public class MongoDBJDBCAdapter extends NoSqlAdapter {
      * @return 返回包含数据库实体的列表
      */
     @Override
-    public List<DatabaseEntity> getDatabaseMetadata() {
-        MongoClient mongoClient = MongoClients.create(getConnectionString());
+    public List<DatabaseEntity> getDatabaseMetadata(String datebaseName) {
+//        MongoClient mongoClient = MongoClients.create(getConnectionString());
         List<DatabaseEntity> databaseEntities = new ArrayList<>();
         // 获取所有数据库
-        for (String dbName : mongoClient.listDatabaseNames()) {
-            DatabaseEntity databaseEntity = new DatabaseEntity();
-            databaseEntity.setDatabaseName(dbName);
-            databaseEntity.setDatabaseEnum(getDatabaseType());
-            MongoDatabase db = mongoClient.getDatabase(dbName);
-            // 获取数据库中的所有集合
-            List<TableEntity> tableEntities = new ArrayList<>();
-            for (String collectionName : db.listCollectionNames()) {
-                TableEntity tableEntity = new TableEntity();
-                tableEntity.setTableName(collectionName);
-                // 获取集合中文档的结构
-                // 此处只获取第一个文档及其字段名
-                MongoCollection<Document> collection = db.getCollection(collectionName);
-                Document firstDoc = collection.find().first();
-                if (firstDoc != null) {
-                    List<ColumnEntity> columnEntities = new ArrayList<>();
-                    for (String fieldName : firstDoc.keySet()) {
-                        ColumnEntity columnEntity = new ColumnEntity();
-                        columnEntity.setColumnName(fieldName);
-                        columnEntity.setColumnType(firstDoc.get(fieldName).getClass().getSimpleName());
-                        columnEntities.add(columnEntity);
-                    }
-                    tableEntity.setColumns(columnEntities);
+        // 使用 try-with-resources 确保资源自动关闭
+        try (MongoClient mongoClient = MongoClients.create(getConnectionString())) {
+            // 获取所有数据库名称
+            for (String dbName : mongoClient.listDatabaseNames()) {
+                DatabaseEntity databaseEntity = new DatabaseEntity();
+                databaseEntity.setDatabaseName(dbName);
+                databaseEntity.setDatabaseEnum(getDatabaseType());
+                if (StringUtils.isBlank(dbName)) {
+                    continue;
                 }
-                tableEntities.add(tableEntity);
+                if (StringUtils.isNotBlank(datebaseName) && !datebaseName.equals(dbName)) {
+                    continue;
+                }
+                MongoDatabase db = mongoClient.getDatabase(dbName);
+                // 获取数据库中的所有集合
+                Map<String,TableEntity> tableEntities = new HashMap<>();
+                for (String collectionName : db.listCollectionNames()) {
+                    TableEntity tableEntity = new TableEntity();
+                    tableEntity.setTableName(collectionName);
+                    // 获取集合中文档的结构
+                    // 此处只获取第一个文档及其字段名
+                    MongoCollection<Document> collection = db.getCollection(collectionName);
+                    Document firstDoc = collection.find().first();
+                    if (firstDoc != null) {
+                        Map<String,ColumnEntity> columnEntities = new HashMap<>();
+                        for (String fieldName : firstDoc.keySet()) {
+                            ColumnEntity columnEntity = new ColumnEntity();
+                            columnEntity.setColumnName(fieldName);
+                            columnEntity.setColumnType(firstDoc.get(fieldName).getClass().getSimpleName());
+                            columnEntities.put(fieldName,columnEntity);
+                        }
+                        tableEntity.setColumns(columnEntities);
+                    }
+                    tableEntities.put(collectionName,tableEntity);
+                }
+                databaseEntity.setTables(tableEntities);
+                databaseEntities.add(databaseEntity);
             }
-            databaseEntity.setTables(tableEntities);
-            databaseEntities.add(databaseEntity);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // 根据需要处理异常，可能抛出自定义异常或记录日志
         }
-        mongoClient.close();
         return databaseEntities;
+    }
+
+    @Override
+    public List<DatabaseEntity> getDatabaseMetadata() {
+        return getDatabaseMetadata(null);
     }
 
     /**

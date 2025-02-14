@@ -2,10 +2,8 @@ package com.cn.jmw.processor.datasource.pojo;
 
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.nosql.query.NoSQLQuery;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
+import com.zaxxer.hikari.HikariConfig;
+import lombok.*;
 
 /**
  * JDBCConnectionEntity类用于表示JDBC连接的基本信息。
@@ -17,7 +15,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString(callSuper = true)
-public class JDBCConnectionEntity {
+public class  JDBCConnectionEntity {
     /**
      * 数据库类型的枚举值，例如：1表示MySQL。
      */
@@ -117,9 +115,36 @@ public class JDBCConnectionEntity {
         this.password = password; // 初始化密码
     }
 
+    public JDBCConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password,JDBCAdapterDataSourceConfig config) {
+        this.dbType = dbType; // 初始化数据库类型
+        this.assetIp = assetIp; // 初始化连接IP
+        this.port = port; // 初始化端口
+        this.dbName = dbName; // 初始化数据库名称
+        this.username = username; // 初始化用户名
+        this.password = password; // 初始化密码
+        this.config = config; // 初始化最大活跃连接数
+    }
+
+    public JDBCConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password,JDBCAdapterDataSourceConfig config,String connectionUser) {
+        this.dbType = dbType; // 初始化数据库类型
+        this.assetIp = assetIp; // 初始化连接IP
+        this.port = port; // 初始化端口
+        this.dbName = dbName; // 初始化数据库名称
+        this.username = username; // 初始化用户名
+        this.password = password; // 初始化密码
+        this.config = config; // 初始化最大活跃连接数
+        this.connectionUser = connectionUser; // 连接使用者（模块）
+    }
+
     // 数据库驱动类名
     private String driverClassName;
 
     // JDBC连接字符串
     private String jdbcString;
+
+    // 最大活动连接数
+    private JDBCAdapterDataSourceConfig config;
+
+   // 连接使用者（模块）
+    private String connectionUser;
 }

@@ -15,7 +15,7 @@ public interface StructuredErrorCodeConstants {
      * 605 - 连接错误 - 一般是算子之间的连接配置错误
      * 606 - 违反业务规则 - 一般是业务规则校验失败
      * 607 - 输入类型与处理器的输入类型不匹配 - 一般是责任链执行逻辑错误
-     * 608 - 继承 processor.BaseProcessor 时必须提供类型参数 - 一般是责任链执行逻辑错误
+     * 608 - 继承 BaseProcessor 时必须提供类型参数 - 一般是责任链执行逻辑错误
      * 609 - 无法创建处理器实例 - 一般是责任链执行逻辑错误
      * 610 - 继承 Context<?,?> 时必须提供类型参数 - 一般是责任链执行逻辑错误
      * 611 - 未实现接口中的方法 - 适配器未实现接口中的方法
@@ -28,6 +28,10 @@ public interface StructuredErrorCodeConstants {
      * 618 - input 为 null - 一般是入参校验失败
      * 619 - input.getDbType（） 为 null - 一般是入参校验失败
      * 620 - 无法连接数据库。（请检查数据库连接信息是否正确） - 一般是数据库连接失败
+     * 621 - 随机采样出现异常(随机采样不想允许入参为空) - 一般是随机采样出现异常
+     * 622 - 随机采样不允许出现“ORDER BY”或者“LIMIT”关键字 - 一般是随机采样出现异常
+     * 623 - 随机抽样数量大于总记录数 - 一般是随机抽样数量大于总记录数
+     * 624 - 索引信息获取失败 - 一般是索引信息获取失败
      */
     ErrorCode INVALID_INPUT = new ErrorCode(600, "输入数据不正确");
     ErrorCode INVALID_OUTPUT = new ErrorCode(601, "输出数据不正确");
@@ -37,7 +41,7 @@ public interface StructuredErrorCodeConstants {
     ErrorCode CONNECTION_ERROR = new ErrorCode(605, "连接错误");
     ErrorCode BUSINESS_RULE_VIOLATION = new ErrorCode(606, "违反业务规则");
     ErrorCode INPUT_TYPE_NOT_MATCH = new ErrorCode(607, "输入类型与处理器的输入类型不匹配");
-    ErrorCode MUST_PROVIDE_TYPE_PARAMETER = new ErrorCode(608, "继承 processor.BaseProcessor<?,?> 时必须提供类型参数");
+    ErrorCode MUST_PROVIDE_TYPE_PARAMETER = new ErrorCode(608, "继承 BaseProcessor<?,?> 时必须提供类型参数");
     ErrorCode UNABLE_TO_CREATE_PROCESSOR_INSTANCE = new ErrorCode(609, "无法创建处理器实例");
     ErrorCode MUST_PROVIDE_TYPE_PARAMETER_CONTEXT = new ErrorCode(610, "继承 Context<?,?> 时必须提供类型参数");
     ErrorCode NOT_IMPLEMENTED_METHOD = new ErrorCode(611, "未实现接口中的方法");
@@ -50,5 +54,10 @@ public interface StructuredErrorCodeConstants {
     ErrorCode INPUT_IS_NULL = new ErrorCode(618, "input 为 null");
     ErrorCode INPUT_GET_DB_TYPE_IS_NULL = new ErrorCode(619, "input.getDbType（） 为 null");
     ErrorCode UNABLE_TO_CONNECT_DATABASE = new ErrorCode(620, "无法连接数据库。（请检查数据库连接信息是否正确）");
+    ErrorCode RANDOM_SAMPLING_ERROR = new ErrorCode(621, "随机采样出现异常(随机采样不想允许入参为空)");
+    ErrorCode RANDOM_SAMPLING_NOT_ALLOW_KEYWORD = new ErrorCode(622, "随机采样不允许出现“ORDER BY”或者“LIMIT”关键字");
+    ErrorCode RANDOM_SAMPLING_EXCEED_RECORDS = new ErrorCode(623, "随机抽样数量大于总记录数");
+    ErrorCode INDEX_INFO_GET_ERROR = new ErrorCode(624, "索引信息获取失败");
+
 
 }

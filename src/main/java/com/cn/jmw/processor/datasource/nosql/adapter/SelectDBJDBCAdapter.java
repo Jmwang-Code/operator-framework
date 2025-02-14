@@ -1,6 +1,11 @@
-package com.cn.jmw.processor.datasource.jdbc.adapter;
+package com.cn.jmw.processor.datasource.nosql.adapter;
 
 import com.cn.jmw.processor.datasource.JDBCAdapter;
+import com.cn.jmw.processor.datasource.NoSqlAdapter;
+import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
+import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
+
+import java.util.List;
 
 /**
  * SelectDBJDBCAdapter类用于适配SelectDB数据库连接。
@@ -8,7 +13,7 @@ import com.cn.jmw.processor.datasource.JDBCAdapter;
  * 该类扩展了JDBCAdapter，提供了与SelectDB相关的数据库操作。
  * </p>
  */
-public class SelectDBJDBCAdapter extends JDBCAdapter {
+public class SelectDBJDBCAdapter extends NoSqlAdapter {
     /**
      * 构造函数用于创建SelectDBJDBCAdapter实例。
      *
@@ -32,5 +37,20 @@ public class SelectDBJDBCAdapter extends JDBCAdapter {
         // 请根据实际情况修改连接字符串
         return "jdbc:selectdb://" + super.hostname + ":" + super.port + "/" + super.databaseName
                 + "?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&autoReconnect=true&nullCatalogMeansCurrent=true";
+    }
+
+    @Override
+    public List<DatabaseEntity> getDatabaseMetadata(String dbName) {
+        return List.of();
+    }
+
+    /**
+     * 获取当前数据库的类型。
+     *
+     * @return 返回数据库枚举类型
+     */
+    @Override
+    public DatabaseEnum getDatabaseType() {
+        return DatabaseEnum.SELECTDB;
     }
 }

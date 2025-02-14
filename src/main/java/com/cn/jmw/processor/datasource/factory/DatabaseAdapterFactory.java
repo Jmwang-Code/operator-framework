@@ -1,12 +1,17 @@
 package com.cn.jmw.processor.datasource.factory;
 
-import com.cn.jmw.processor.datasource.JDBCAdapter;
+import com.cn.jmw.processor.datasource.Database;
 import com.cn.jmw.processor.datasource.NoSqlAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.jdbc.adapter.*;
+import com.cn.jmw.processor.datasource.JDBCAdapter;
+import com.cn.jmw.processor.datasource.nosql.adapter.AliyunODPSJDBCAdapter;
 import com.cn.jmw.processor.datasource.nosql.adapter.HiveJDBCAdapter;
 import com.cn.jmw.processor.datasource.nosql.adapter.MongoDBJDBCAdapter;
+import com.cn.jmw.processor.datasource.nosql.adapter.SelectDBJDBCAdapter;
+import com.cn.jmw.processor.datasource.pojo.JDBCAdapterDataSourceConfig;
 import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;
+import com.zaxxer.hikari.HikariConfig;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
@@ -29,7 +34,6 @@ public class DatabaseAdapterFactory {
     static {
         // 注册支持的数据库适配器
         ADAPTER_MAP.put(DatabaseEnum.ALIYUN_RDS, AliyunRDSJDBCAdapter.class);
-        ADAPTER_MAP.put(DatabaseEnum.ALIYUN_ODPS, AliyunODPSJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.CLICKHOUSE, ClickHouseJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.DB2, DB2JDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.DERBY, DerbyJDBCAdapter.class);
@@ -40,7 +44,6 @@ public class DatabaseAdapterFactory {
         ADAPTER_MAP.put(DatabaseEnum.GBASE, GBaseJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.GOLDENDB, GoldenDBJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.GREENPLUM, GreenplumJDBCAdapter.class);
-        ADAPTER_MAP.put(DatabaseEnum.HIVE, HiveJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.KINGBASE8, KingBase8JDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.KUNDB, KunDBJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.MYSQL, MySQLJDBCAdapter.class);
@@ -49,7 +52,6 @@ public class DatabaseAdapterFactory {
         ADAPTER_MAP.put(DatabaseEnum.ORACLE, OracleJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.OSCAR, OSCARJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.POSTGRESQL, PostgreSQLJDBCAdapter.class);
-        ADAPTER_MAP.put(DatabaseEnum.SELECTDB, SelectDBJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.SQLITE3, SQLite3JDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.SQLSERVER, SQLServerJDBCAdapter.class);
         ADAPTER_MAP.put(DatabaseEnum.STARROCKS, StarRocksJDBCAdapter.class);
@@ -65,6 +67,9 @@ public class DatabaseAdapterFactory {
     static {
         // 注册支持的数据库适配器
         ADAPTER_NO_MAP.put(DatabaseEnum.MONGODB, MongoDBJDBCAdapter.class);
+        ADAPTER_NO_MAP.put(DatabaseEnum.ALIYUN_ODPS, AliyunODPSJDBCAdapter.class);
+        ADAPTER_NO_MAP.put(DatabaseEnum.SELECTDB, SelectDBJDBCAdapter.class);
+        ADAPTER_NO_MAP.put(DatabaseEnum.HIVE, HiveJDBCAdapter.class);
     }
 
     /**
@@ -80,7 +85,7 @@ public class DatabaseAdapterFactory {
      * @throws IllegalAccessException 如果无法访问适配器类
      * @throws InstantiationException 如果实例化适配器失败
      */
-    private static JDBCAdapter getSQLAdapter(DatabaseEnum dbType, String hostname, Integer port, String databaseName, String username, String password) throws IllegalAccessException, InstantiationException {
+    private static JDBCAdapter getSQLAdapter(DatabaseEnum dbType, String hostname, Integer port, String databaseName, String username, String password, JDBCAdapterDataSourceConfig config, String connectionUser) throws IllegalAccessException, InstantiationException {
         if (dbType==null){
             throw exception(DATABASE_INPUT_TYPE_ERROR);
         }
@@ -89,7 +94,11 @@ public class DatabaseAdapterFactory {
             throw exception(UNSUPPORTED_DATABASE_TYPE);
         }
         try {
-            return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class).newInstance(hostname, port, databaseName, username, password);
+            if (connectionUser==null){
+                return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class,JDBCAdapterDataSourceConfig.class).newInstance(hostname, port, databaseName, username, password,config);
+            }else {
+                return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class,JDBCAdapterDataSourceConfig.class,String.class).newInstance(hostname, port, databaseName, username, password,config,connectionUser);
+            }
         } catch (InvocationTargetException e) {
             throw new RuntimeException(e);
         } catch (NoSuchMethodException e) {
@@ -110,7 +119,7 @@ public class DatabaseAdapterFactory {
      * @throws IllegalAccessException 如果无法访问适配器类
      * @throws InstantiationException 如果实例化适配器失败
      */
-    private static NoSqlAdapter getNoSQLAdapter(DatabaseEnum dbType, String hostname, Integer port, String databaseName, String username, String password) throws IllegalAccessException, InstantiationException {
+    private static NoSqlAdapter getNoSQLAdapter(DatabaseEnum dbType, String hostname, Integer port, String databaseName, String username, String password,JDBCAdapterDataSourceConfig config,String connectionUser) throws IllegalAccessException, InstantiationException {
         if (dbType==null){
             throw exception(DATABASE_INPUT_TYPE_ERROR);
         }
@@ -119,7 +128,11 @@ public class DatabaseAdapterFactory {
             throw exception(UNSUPPORTED_DATABASE_TYPE);
         }
         try {
-            return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class).newInstance(hostname, port, databaseName, username, password);
+            if (connectionUser==null){
+                return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class,JDBCAdapterDataSourceConfig.class).newInstance(hostname, port, databaseName, username, password ,config);
+            }else {
+                return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class, JDBCAdapterDataSourceConfig.class, String.class).newInstance(hostname, port, databaseName, username, password, config, connectionUser);
+            }
         } catch (InvocationTargetException e) {
             throw new RuntimeException(e);
         } catch (NoSuchMethodException e) {
@@ -136,7 +149,7 @@ public class DatabaseAdapterFactory {
      * @throws InstantiationException 如果实例化适配器失败
      */
     public static JDBCAdapter getSQLAdapter(JDBCConnectionEntity jdbcConnectionEntity) throws IllegalAccessException, InstantiationException {
-        return getSQLAdapter(jdbcConnectionEntity.getDbType(), jdbcConnectionEntity.getAssetIp(), jdbcConnectionEntity.getPort(), jdbcConnectionEntity.getDbName(), jdbcConnectionEntity.getUsername(), jdbcConnectionEntity.getPassword());
+        return getSQLAdapter(jdbcConnectionEntity.getDbType(), jdbcConnectionEntity.getAssetIp(), jdbcConnectionEntity.getPort(), jdbcConnectionEntity.getDbName(), jdbcConnectionEntity.getUsername(), jdbcConnectionEntity.getPassword(),jdbcConnectionEntity.getConfig(),jdbcConnectionEntity.getConnectionUser());
     }
 
     /**
@@ -148,7 +161,7 @@ public class DatabaseAdapterFactory {
      * @throws InstantiationException 如果实例化适配器失败
      */
     public static NoSqlAdapter getNoSQLAdapter(JDBCConnectionEntity jdbcConnectionEntity) throws IllegalAccessException, InstantiationException {
-        return getNoSQLAdapter(jdbcConnectionEntity.getDbType(), jdbcConnectionEntity.getAssetIp(), jdbcConnectionEntity.getPort(), jdbcConnectionEntity.getDbName(), jdbcConnectionEntity.getUsername(), jdbcConnectionEntity.getPassword());
+        return getNoSQLAdapter(jdbcConnectionEntity.getDbType(), jdbcConnectionEntity.getAssetIp(), jdbcConnectionEntity.getPort(), jdbcConnectionEntity.getDbName(), jdbcConnectionEntity.getUsername(), jdbcConnectionEntity.getPassword(),jdbcConnectionEntity.getConfig(),jdbcConnectionEntity.getConnectionUser());
     }
 
     /**
@@ -165,14 +178,18 @@ public class DatabaseAdapterFactory {
      * @throws IllegalAccessException 如果无法访问适配器类
      * @throws InstantiationException 如果实例化适配器失败
      */
-    private static <T> T getAdapter(Class<T> adapterClass, String hostname, Integer port, String databaseName, String username, String password) throws IllegalAccessException, InstantiationException {
+    private static <T> T getAdapter(Class<T> adapterClass, String hostname, Integer port, String databaseName, String username, String password, JDBCAdapterDataSourceConfig config, String connectionUser) throws IllegalAccessException, InstantiationException {
         if (adapterClass == null) {
             throw exception(DATABASE_INPUT_TYPE_ERROR);
         }
         for (Map.Entry<DatabaseEnum, Class<? extends JDBCAdapter>> entry : ADAPTER_MAP.entrySet()) {
             if (entry.getValue().equals(adapterClass)) {
                 try {
-                    return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class).newInstance(hostname, port, databaseName, username, password);
+                    if (connectionUser==null){
+                        return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class,JDBCAdapterDataSourceConfig.class).newInstance(hostname, port, databaseName, username, password,config);
+                    }else {
+                        return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class, JDBCAdapterDataSourceConfig.class, String.class).newInstance(hostname, port, databaseName, username, password, config, connectionUser);
+                    }
                 } catch (InvocationTargetException | NoSuchMethodException e) {
                     throw new RuntimeException(e);
                 }
@@ -181,7 +198,11 @@ public class DatabaseAdapterFactory {
         for (Map.Entry<DatabaseEnum, Class<? extends NoSqlAdapter>> entry : ADAPTER_NO_MAP.entrySet()) {
             if (entry.getValue().equals(adapterClass)) {
                 try {
-                    return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class).newInstance(hostname, port, databaseName, username, password);
+                    if (connectionUser==null){
+                        return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class,JDBCAdapterDataSourceConfig.class).newInstance(hostname, port, databaseName, username, password,config);
+                    }else {
+                        return adapterClass.getConstructor(String.class, Integer.class, String.class, String.class, String.class, JDBCAdapterDataSourceConfig.class, String.class).newInstance(hostname, port, databaseName, username, password, config, connectionUser);
+                    }
                 } catch (InvocationTargetException | NoSuchMethodException e) {
                     throw new RuntimeException(e);
                 }
@@ -202,6 +223,20 @@ public class DatabaseAdapterFactory {
      * @throws InstantiationException 如果实例化适配器失败
      */
     public static <T> T getAdapter(JDBCConnectionEntity jdbcConnectionEntity, Class<T> adapterClass) throws IllegalAccessException, InstantiationException {
-        return getAdapter(adapterClass, jdbcConnectionEntity.getAssetIp(), jdbcConnectionEntity.getPort(), jdbcConnectionEntity.getDbName(), jdbcConnectionEntity.getUsername(), jdbcConnectionEntity.getPassword());
+        return getAdapter(adapterClass, jdbcConnectionEntity.getAssetIp(), jdbcConnectionEntity.getPort(), jdbcConnectionEntity.getDbName(), jdbcConnectionEntity.getUsername(), jdbcConnectionEntity.getPassword(),jdbcConnectionEntity.getConfig(),jdbcConnectionEntity.getConnectionUser());
+    }
+
+    /**
+     * 通过适配器类和连接实体获取具体适配器。
+     *
+     * @param jdbcConnectionEntity 数据库连接实体
+     * @param adapterClass         适配器类
+     * @param <T>                 适配器类型
+     * @return 返回对应的适配器实例
+     * @throws IllegalAccessException 如果无法访问适配器类
+     * @throws InstantiationException 如果实例化适配器失败
+     */
+    public static <T> Database getDatabase(JDBCConnectionEntity jdbcConnectionEntity, Class<T> adapterClass) throws IllegalAccessException, InstantiationException {
+        return (Database)getAdapter(adapterClass, jdbcConnectionEntity.getAssetIp(), jdbcConnectionEntity.getPort(), jdbcConnectionEntity.getDbName(), jdbcConnectionEntity.getUsername(), jdbcConnectionEntity.getPassword(),jdbcConnectionEntity.getConfig(),jdbcConnectionEntity.getConnectionUser());
     }
 }

@@ -1,6 +1,7 @@
-package com.cn.jmw.processor.datasource.jdbc.inter;
+package com.cn.jmw.processor.datasource.jdbc.inter.doris;
 
 import com.cn.jmw.processor.datasource.enums.FileTypeEnum;
+import com.cn.jmw.processor.datasource.jdbc.inter.doris.pojo.ProcessListPojo;
 import com.cn.jmw.processor.datasource.pojo.RoutineLoadResult;
 import com.cn.jmw.processor.datasource.pojo.ShowPartitionResult;
 import com.cn.jmw.processor.datasource.pojo.StreamLoadResult;
@@ -83,6 +84,41 @@ public interface Doris {
     List<ShowPartitionResult> showPartitions(String dbName, String tableName, String sortTimeField);
 
     /**
-     * 控制集群管理
+     * doris —— query任务的查询
      */
+    String getQueryIDList(String databaseName, String likeSql);
+
+    /**
+     * 获取当前数据库中正在运行的进程列表。
+     * 
+     * 该方法根据提供的 `ProcessListPojo` 对象中的条件构建 SQL 查询，
+     * 从 `information_schema.PROCESSLIST` 表中检索与条件匹配的进程信息。
+     * 返回一个包含所有匹配进程的 `ProcessListPojo` 对象列表。
+     *
+     * @param processListPojo 包含查询条件的对象
+     * @return List<ProcessListPojo> 匹配的进程列表
+     */
+    List<ProcessListPojo> getProcessList(ProcessListPojo processListPojo);
+
+    /**
+     * 终止指定的查询任务。
+     * 
+     * 该方法根据提供的查询 ID，强制停止正在执行的查询。 
+     * 这在需要取消长时间运行的查询或释放系统资源时非常有用。
+     *
+     * @param queryId 要终止的查询的唯一标识符,他是一个字符串不是整数
+     * @return boolean 只指定成功删除不知道失败原因（只能指定如果是ture说明成功删除了当前的查询任务，如果是false不能确定是什么原因没有删除成功）
+     */
+    boolean killQuery(String queryId);
+
+    /**
+     * 终止指定的数据库连接。
+     * 
+     * 该方法根据提供的连接 ID，强制关闭与数据库的连接。
+     * 这在需要释放资源或清理不再使用的连接时非常有用。
+     *
+     * @param connectionId 要终止的连接的唯一标识符
+     * @return boolean 返回操作是否成功，成功时返回 true，失败时返回 false。
+     */
+    boolean killConnection(Integer connectionId);
 }

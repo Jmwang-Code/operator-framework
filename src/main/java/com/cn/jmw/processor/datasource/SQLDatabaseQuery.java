@@ -1,7 +1,7 @@
 package com.cn.jmw.processor.datasource;
-
-import org.apache.commons.dbutils.ResultSetHandler;
-
+import com.cn.jmw.processor.datasource.jdbc.inter.ResultSetHandler;
+//import org.apache.commons.dbutils.ResultSetHandler;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +21,8 @@ public interface SQLDatabaseQuery extends DatabaseQuery{
      * @throws SQLException 如果数据库访问错误或其他错误
      */
     List<Map<String, Object>> executeDMLC(String sql, Object[] params) throws SQLException;
+
+    List<Map<String, Object>> executeDMLC(Connection connection, String sql, Object[] params) throws SQLException;
 
     /**
      * 执行DML操作但是只想知道SQL是否只想完毕
@@ -50,5 +52,5 @@ public interface SQLDatabaseQuery extends DatabaseQuery{
      * @return 查询结果，由ResultSetHandler处理
      * @throws SQLException 如果数据库访问错误或其他错误
      */
-    <T> T queryStream(String sql, ResultSetHandler<T> handler) throws SQLException;
+    <T> T queryStream(String sql, ResultSetHandler<T> handler, Integer size) throws SQLException;
 }

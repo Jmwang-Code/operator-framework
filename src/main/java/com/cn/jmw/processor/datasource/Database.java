@@ -4,7 +4,11 @@ package com.cn.jmw.processor.datasource;
  * Database是一个抽象类，用于定义与数据库相关的基本信息和操作。
  * 该类实现了DatabaseAdapter接口，并为具体数据库适配器提供了通用的构造函数和字段。
  */
-public abstract class Database implements DatabaseAdapter{
+public abstract class Database implements
+        // 数据库适配器
+        DatabaseAdapter,
+        // 其他功能
+        DBFunctionality{
     protected String hostname; // 数据库主机名
     protected Integer port; // 数据库端口
     protected String databaseName; // 数据库名称

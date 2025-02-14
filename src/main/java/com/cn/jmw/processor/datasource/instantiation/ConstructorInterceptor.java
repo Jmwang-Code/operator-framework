@@ -31,7 +31,7 @@ public class ConstructorInterceptor implements Implementation {
                             }
 
                             @Override
-                            public Size apply(MethodVisitor methodVisitor, Context implementationContext) {
+                            public Size apply(MethodVisitor methodVisitor, Implementation.Context implementationContext) {
                                 for (int i = 0; i < fieldNames.size(); i++) {
                                     methodVisitor.visitVarInsn(Opcodes.ALOAD, 0); // 加载this
                                     methodVisitor.visitVarInsn(Type.getType(fieldTypes.get(i)).getOpcode(Opcodes.ILOAD), i + 1); // 加载参数

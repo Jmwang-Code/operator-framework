@@ -1,14 +1,19 @@
 package com.cn.jmw.processor.datasource;
 
-import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
+import com.cn.jmw.pojo.SQLQueryMontage;
 import com.cn.jmw.processor.datasource.factory.DataSourceConnectionPool;
+import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
 import com.cn.jmw.processor.datasource.pojo.*;
-import com.alibaba.druid.pool.DruidDataSource;
+import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.dbutils.QueryRunner;
-import org.apache.commons.dbutils.ResultSetHandler;
+import org.apache.commons.dbutils.handlers.MapListHandler;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.dbutils.QueryRunner;
+import com.cn.jmw.processor.datasource.jdbc.inter.ResultSetHandler;
 
+import javax.sql.DataSource;
 import java.sql.*;
 import java.util.*;
 
@@ -24,7 +29,7 @@ import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
  * </p>
  */
 @Slf4j
-public abstract class JDBCAdapter extends Database implements
+public abstract class JDBCAdapter extends JDBCDataSourceConfig implements
         // DQL
         SQLDatabaseQuery,
         // DDL
@@ -32,7 +37,7 @@ public abstract class JDBCAdapter extends Database implements
         // 公共系统命令语言 SCL
         SystemCommandLanguage {
 
-    public QueryRunner runner; // 用于执行SQL查询的QueryRunner实例
+    public final QueryRunner runner; // 用于执行SQL查询的QueryRunner实例
     public static DataSourceConnectionPool pool = DataSourceConnectionPool.getInstance(); // 数据源连接池实例
 
     /**
@@ -44,42 +49,29 @@ public abstract class JDBCAdapter extends Database implements
      * @param username     数据库用户名
      * @param password     数据库密码
      */
-    public JDBCAdapter(String hostname, Integer port, String databaseName, String username, String password) {
+    public JDBCAdapter(String hostname, Integer port, String databaseName, String username, String password, JDBCAdapterDataSourceConfig config, String connectionUser) {
         super(hostname, port, StringUtils.isBlank(databaseName) ? "" : databaseName, username, password);
-        DruidDataSource dataSource = new DruidDataSource();
-        /**
-         * 配置参数
-         */
-        // 设置最大等待时间 单位毫秒
-        dataSource.setMaxWait(600000);
-        // 设置初始连接数
-        dataSource.setInitialSize(5);
-        // 设置最小空闲连接数
-        dataSource.setMinIdle(1);
-        // 设置最大连接数
-        dataSource.setMaxActive(10);
-        // 设置获取连接的超时时间 单位毫秒
-        dataSource.setTimeBetweenEvictionRunsMillis(60000);
-        // 设置连接的最小生存时间，单位为毫秒
-        dataSource.setMinEvictableIdleTimeMillis(300000);
-        // 检测连接有效性时用的SQL
-        dataSource.setValidationQuery("SELECT 1");
-        // 设置是否在空闲时检测连接的有效性
-        dataSource.setTestWhileIdle(true);
-        // 设置是否在从池中取出连接前检测连接的有效性
-        dataSource.setTestOnBorrow(true);
-        // 设置是否在归还连接到池中时检测连接的有效性
-        dataSource.setTestOnReturn(true);
-
-        dataSource.setUrl(getConnectionString());
-        dataSource.setUsername(username);
-        dataSource.setPassword(password);
-        // ID 为 hostname+port+databaseName
-        if (StringUtils.isBlank(databaseName)) {
-            databaseName = ""; // 如果数据库名为空，则设置为空字符串
+        super.connectionUser = connectionUser;
+        super.config = config;
+        String dataSourceId = hostname + port + (StringUtils.isBlank(databaseName) ? "" : databaseName);
+        DataSourceConnectionPool pool = DataSourceConnectionPool.getInstance();
+        DataSource dataSource = pool.getDataSource(dataSourceId);
+        if (dataSource == null) {
+            synchronized (this) {
+                dataSource = pool.createDataSource(dataSourceId, getConnectionString(), username, password, config);
+            }
         }
-        pool.addDataSource(hostname + port + databaseName, dataSource);
-        this.runner = new QueryRunner(dataSource); // 初始化QueryRunner
+
+        this.runner = new QueryRunner(dataSource); // 初始化 QueryRunner
+    }
+
+    public JDBCAdapter(String hostname, Integer port, String databaseName, String username, String password) {
+        this(hostname, port, databaseName, username, password, new JDBCAdapterDataSourceConfig(),null);
+    }
+
+    @Override
+    public String getValidationQuery() {
+        return "SELECT 1";
     }
 
     /**
@@ -90,7 +82,7 @@ public abstract class JDBCAdapter extends Database implements
      */
     @Override
     public boolean testConnection() {
-        try (Connection connection = pool.getConnection(hostname + port + databaseName)) {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName,config,connectionUser)) {
             return connection != null && !connection.isClosed(); // 检查连接是否有效
         } catch (Exception e) {
             throw exception(UNABLE_TO_CONNECT_DATABASE); // 抛出无法连接数据库的异常
@@ -107,6 +99,11 @@ public abstract class JDBCAdapter extends Database implements
         return this.password; // 返回数据库密码
     }
 
+    @Override
+    public List<DatabaseEntity> getDatabaseMetadata() {
+        return getDatabaseMetadata(null);
+    }
+
     /**
      * 获取数据库元数据信息。
      *
@@ -114,10 +111,10 @@ public abstract class JDBCAdapter extends Database implements
      * @throws SQLException 如果无法检索数据库元数据，将抛出异常
      */
     @Override
-    public List<DatabaseEntity> getDatabaseMetadata() {
+    public List<DatabaseEntity> getDatabaseMetadata(String dbName) {
         List<DatabaseEntity> databaseEntities = new ArrayList<>();
         List<String> ignoreDatabases = getIgnoreDatabaseList(); // 获取需要忽略的数据库列表
-        try (Connection connection = pool.getConnection(hostname + port + databaseName)) {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName,config,connectionUser)) {
             DatabaseMetaData metaData = connection.getMetaData();
             try (ResultSet catalogs = metaData.getCatalogs()) {
                 while (catalogs.next()) {
@@ -126,27 +123,38 @@ public abstract class JDBCAdapter extends Database implements
                     if (ignoreDatabases.contains(databaseName)) {
                         continue;
                     }
+                    if (StringUtils.isNotBlank(dbName) && !dbName.equals(databaseName)) {
+                        continue;
+                    }
                     DatabaseEntity databaseEntity = new DatabaseEntity();
                     databaseEntity.setDatabaseName(databaseName);
                     // 存入DatabaseType
                     databaseEntity.setDatabaseEnum(getDatabaseType());
-                    List<TableEntity> tableEntities = new ArrayList<>();
+                    Map<String, TableEntity> tableEntities = new HashMap<>();
                     try (ResultSet tables = metaData.getTables(databaseName, null, "%", new String[]{"TABLE"})) {
                         while (tables.next()) {
                             String tableName = tables.getString("TABLE_NAME");
+
                             TableEntity tableEntity = new TableEntity();
                             tableEntity.setTableName(tableName);
-                            List<ColumnEntity> columnEntities = new ArrayList<>();
+                            tableEntity.setTableComment(tables.getString("REMARKS")); // 获取表注释
+                            Map<String, ColumnEntity> columnEntities = new HashMap<>();
                             try (ResultSet cols = metaData.getColumns(databaseName, null, tableName, "%")) {
                                 while (cols.next()) {
                                     ColumnEntity columnEntity = new ColumnEntity();
                                     columnEntity.setColumnName(cols.getString("COLUMN_NAME")); // 获取列名
                                     columnEntity.setColumnType(cols.getString("TYPE_NAME")); // 获取列类型
-                                    columnEntities.add(columnEntity);
+                                    columnEntity.setColumnSize(cols.getInt("COLUMN_SIZE")); // 获取列大小
+                                    columnEntity.setNullable(cols.getInt("NULLABLE") == DatabaseMetaData.columnNullable); // 获取可否为NULL
+                                    columnEntity.setDefaultValue(cols.getString("COLUMN_DEF")); // 获取默认值
+                                    columnEntity.setAutoIncrement("YES".equals(cols.getString("IS_AUTOINCREMENT")) ? 1 : 0); // 获取自增状态
+                                    columnEntity.setColumnComment(cols.getString("REMARKS")); // 获取列注释
+
+                                    columnEntities.put(columnEntity.getColumnName(), columnEntity);
                                 }
                             }
                             tableEntity.setColumns(columnEntities); // 设置表的列信息
-                            tableEntities.add(tableEntity);
+                            tableEntities.put(tableName, tableEntity);
                         }
                     }
                     databaseEntity.setTables(tableEntities); // 设置数据库中的表信息
@@ -154,6 +162,7 @@ public abstract class JDBCAdapter extends Database implements
                 }
             }
         } catch (SQLException e) {
+            e.printStackTrace();
             throw exception(UNABLE_TO_RETRIEVE_DATABASE_METADATA); // 抛出无法检索数据库元数据的异常
         }
         return databaseEntities; // 返回数据库实体列表
@@ -167,7 +176,7 @@ public abstract class JDBCAdapter extends Database implements
      */
     @Override
     public String getDatabaseVersion() {
-        try (Connection connection = pool.getConnection(hostname + port + databaseName)) {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName,config,connectionUser)) {
             DatabaseMetaData metaData = connection.getMetaData();
             return metaData.getDatabaseProductVersion(); // 返回数据库版本
         } catch (Exception e) {
@@ -184,32 +193,91 @@ public abstract class JDBCAdapter extends Database implements
      */
     @Override
     public List<Map<String, Object>> executeDMLC(String sql, Object[] params) throws SQLException {
-        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+//        return this.runner.query(pool.getConnection(hostname + port + databaseName), sql, new MapListHandler(), params);
+//        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+        try (Connection connection = pool.getConnection(hostname + port + databaseName,config,connectionUser)) {
+            return this.runner.query(connection, sql, new MapListHandler(), params);
+        } catch (SQLException e) {
+            throw new SQLException("Failed to execute query: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 当存在大批量executeDMLC函数要调用，最好在外部定义一个Connection 公用它
+     *
+     * @param sql    要执行的SQL查询语句
+     * @param params 查询参数数组，可能为null
+     * @throws SQLException 如果数据库访问错误或其他错误
+     */
+    @Override
+    public List<Map<String, Object>> executeDMLC(Connection connection, String sql, Object[] params) throws SQLException {
+        return this.runner.query(connection, sql, new MapListHandler(), params);
+//        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
     }
 
     /**
      * 执行批量查询操作，尚未实现。
      *
-     * @param sql 要执行的SQL查询语句
+     * @param sql    要执行的SQL查询语句
      * @param params 查询参数数组，可能为null
      * @return boolean
      * @throws SQLException 如果数据库访问错误或其他错误
      */
     @Override
-    public int executeDMLRUD(String sql, Object[] params) throws SQLException{
-        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    public int executeDMLRUD(String sql, Object[] params) throws SQLException {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName,config,connectionUser)) {
+            return this.runner.update(connection, sql, params);
+        }catch (SQLException e) {
+            throw new SQLException("Failed to execute update: " + e.getMessage(), e);
+        }
     }
 
     /**
      * 执行批量查询操作，尚未实现。
      *
-     * @param sql 要执行的SQL查询语句
+     * @param sql    要执行的SQL查询语句
      * @param params 查询参数数组，可能为null
      * @return boolean
      * @throws SQLException 如果数据库访问错误或其他错误
      */
     @Override
-    public void executeDDL(String sql, Object[] params) throws SQLException{
+    public void executeDDL(String sql, Object[] params) throws SQLException {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName,config,connectionUser);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            // Set parameters if any
+            if (params != null) {
+                for (int i = 0; i < params.length; i++) {
+                    statement.setObject(i + 1, params[i]);
+                }
+            }
+            statement.execute();
+        } catch (SQLException e) {
+            throw new SQLException("Error executing DDL: " + e.getMessage(), e);
+        }
+//        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    /**
+     * 获取索引
+     *
+     * @param dbName    数据库
+     * @param tableName 数据表
+     * @return 索引
+     */
+    @Override
+    public Map<String, Map<String, Object>> getIndexInfo(Connection connection, String dbName, String tableName) {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    /**
+     * 获取主键
+     *
+     * @param dbName    数据库
+     * @param tableName 数据表
+     * @return 主键
+     */
+    @Override
+    public List<Map<String, Object>> getPrimaryKeyInfo(String dbName, String tableName) {
         throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
     }
 
@@ -223,11 +291,11 @@ public abstract class JDBCAdapter extends Database implements
      * @throws SQLException 如果数据库访问错误或其他错误
      */
     @Override
-    public <T> T queryStream(String sql, ResultSetHandler<T> handler) throws SQLException {
+    public <T> T queryStream(String sql, ResultSetHandler<T> handler, Integer size) throws SQLException {
         T results = null;
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName,config,connectionUser);
              PreparedStatement statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
-            statement.setFetchSize(Integer.MIN_VALUE); // 这是MySQL流式查询的重要设置
+            statement.setFetchSize(size); // 这是MySQL流式查询的重要设置
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     T result = handler.handle(resultSet); // 处理结果集
@@ -268,9 +336,23 @@ public abstract class JDBCAdapter extends Database implements
         throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
     }
 
-
-    public Map<String, ShowTableStatusResult> showTableStatus(){
+    /**
+     * 获取表的结构信息
+     *
+     * @return 显示表格状态结果
+     */
+    public Map<String, ShowTableStatusResult> showTableStatus() {
         return showTableStatus(null);
+    }
+
+    /**
+     * 添加随机采样
+     *
+     * @param sqlQueryMontage
+     * @return 增加随机抽样后的SQL
+     */
+    public List<String> addRandomSampling(SQLQueryMontage sqlQueryMontage, int N, int M) {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
     }
 
     /**
@@ -287,8 +369,8 @@ public abstract class JDBCAdapter extends Database implements
             sql = sql + " WHERE Name = ?";
         }
 
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
-             PreparedStatement statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName,config,connectionUser);
+            PreparedStatement statement = connection.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);){
 
             if (StringUtils.isNotBlank(tableName)) {
                 statement.setString(1, tableName);
@@ -347,7 +429,7 @@ public abstract class JDBCAdapter extends Database implements
 
             //curSizes当前大小 rowsCounts行数
             ShowTableStatusResult showTableStatusResult = stringShowTableStatusResultMap.get(tableName);
-            if (showTableStatusResult==null){
+            if (showTableStatusResult == null) {
                 log.info("数据表阈值清理————表名: {}, 失效表", tableName);
                 continue;
             }
@@ -383,13 +465,13 @@ public abstract class JDBCAdapter extends Database implements
 
             int n = 0;
             double newCurSizes = curSizes;
-            while (newCurSizes > allowSize && n <= earliestAndLatestDays){
+            while (newCurSizes > allowSize && n <= earliestAndLatestDays) {
                 sqlCount = String.format(sqlCount, tableName, sortTimeField, sortTimeField, tableName, n);
 
                 try {
                     List<Map<String, Object>> countResult = executeDMLC(sqlCount, null);
-                    double COUNT = countResult.isEmpty() ? 0 : (Long)countResult.get(0).get("COUNT");
-                    newCurSizes = newCurSizes - ((COUNT * avgRowSize)/ 1024 / 1024 / 1024);
+                    double COUNT = countResult.isEmpty() ? 0 : (Long) countResult.get(0).get("COUNT");
+                    newCurSizes = newCurSizes - ((COUNT * avgRowSize) / 1024 / 1024 / 1024);
 
                     if (newCurSizes < allowSize) {
                         log.info("数据表阈值清理————正在处理表: {}, 当前天数: {}, 计数: {}条, 新大小: {}GB", tableName, n, COUNT, newCurSizes);
@@ -414,12 +496,12 @@ public abstract class JDBCAdapter extends Database implements
     /**
      * 计算当前数据库中最早和最迟进入库中的数据天数差
      *
-     * @param tableName 表名称
+     * @param tableName     表名称
      * @param sortTimeField 排序字段
      * @return 最早和最迟进入库中的数据天数差
      */
     @Override
-    public int getEarliestAndLatestDays(String tableName,String sortTimeField) {
+    public int getEarliestAndLatestDays(String tableName, String sortTimeField) {
         String dayDiffQuery = "SELECT DATEDIFF(MAX(" + sortTimeField + "), MIN(" + sortTimeField + ")) AS dayDiff FROM " + tableName;
 
         int maxDays = 0;
@@ -432,5 +514,59 @@ public abstract class JDBCAdapter extends Database implements
             throw new RuntimeException(e);
         }
         return maxDays;
+    }
+
+    /**
+     * 根据N个抽样点获取前后M条数据
+     *
+     * @param sqlQueryBuilder 前提是简单SQL不含嵌套
+     * @param N               抽样点个数
+     * @param M               每个抽样点前后各获取的记录数
+     * @return 抽样数据
+     */
+    @Override
+    public List<String> N_point_sampling_method(SQLQueryMontage sqlQueryBuilder, int N, int M) {
+        //sql替换FROM之前的变成SELECT COUNT(1)
+        String sql = sqlQueryBuilder.getSqlQueryBuilders().get(0).buildSQL();
+        String countSql = sql.replaceAll("(?i)SELECT\\s+.*?\\s+FROM", "SELECT COUNT(1) FROM");
+        List<String> sampledData = new ArrayList<>();
+        try {
+            // 获取表的总记录数
+            List<Map<String, Object>> countResult = executeDMLC(countSql, null);
+            long totalCount = countResult.isEmpty() ? 0 : (Long) countResult.get(0).get("count(1)");
+
+            // 验证抽样点和前后记录分布一定要小于表的总记录数
+            if (N <= 0 || totalCount == 0 || M <= 0) {
+                return sampledData; // 无效参数直接返回
+            }
+
+            if (totalCount < N * 2 * M) {
+                throw exception(RANDOM_SAMPLING_EXCEED_RECORDS);
+            }
+
+            // 计算均匀分布的抽样点
+            Long interval = totalCount / (N); // 确保抽样点分布均匀
+
+            // 确定每个抽样点的前后范围，进行查询并去重
+
+            for (int i = 1; i <= N; i++) {
+                Long samplePoint = i * interval; // 计算当前的抽样点
+
+                // 确保抽样点的前后范围不会超过表的边界
+                Long start = Math.max(samplePoint - M, 0);
+                Long end = Math.min(samplePoint + M, totalCount - 1);
+
+                // 计算返回记录的数量
+                Long limitCount = end >= start ? (end - start + 1) : 0; // 计算 LIMIT 的数量
+
+                // 查询指定范围内的数据
+                String limitSql = sql + " LIMIT " + start + ", " + limitCount;
+                sampledData.add(limitSql);
+
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return sampledData;
     }
 }

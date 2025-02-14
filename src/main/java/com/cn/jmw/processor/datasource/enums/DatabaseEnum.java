@@ -18,7 +18,7 @@ public enum DatabaseEnum {
     /**
      * 阿里云ODPS数据库
      */
-    ALIYUN_ODPS("ALIYUN_ODPS", 2, "NoSQL", AliyunODPSJDBCAdapter.class),
+    ALIYUN_ODPS("ALIYUN_ODPS", 2, "NOSQL", AliyunODPSJDBCAdapter.class),
 
     /**
      * ClickHouse数据库
@@ -73,7 +73,7 @@ public enum DatabaseEnum {
     /**
      * Hive数据库
      */
-    HIVE("HIVE", 13, "SQL", HiveJDBCAdapter.class),
+    HIVE("HIVE", 13, "NOSQL", HiveJDBCAdapter.class),
 
     /**
      * KingBase8数据库
@@ -83,12 +83,12 @@ public enum DatabaseEnum {
     /**
      * KunDB数据库
      */
-    KUNDB("KUNDB", 16, "NoSQL", KunDBJDBCAdapter.class),
+    KUNDB("KUNDB", 16, "SQL", KunDBJDBCAdapter.class),
 
     /**
      * MongoDB数据库
      */
-    MONGODB("MONGODB", 17, "NoSQL", MongoDBJDBCAdapter.class),
+    MONGODB("MONGODB", 17, "NOSQL", MongoDBJDBCAdapter.class),
 
     /**
      * MySQL数据库
@@ -123,7 +123,7 @@ public enum DatabaseEnum {
     /**
      * SelectDB数据库
      */
-    SELECTDB("SELECTDB", 24, "SQL", SelectDBJDBCAdapter.class),
+    SELECTDB("SELECTDB", 24, "NOSQL", SelectDBJDBCAdapter.class),
 
     /**
      * SQLite3数据库
@@ -131,7 +131,7 @@ public enum DatabaseEnum {
     SQLITE3("SQLITE3", 25, "SQL", SQLite3JDBCAdapter.class),
 
     /**
-     * SQL Server数据库
+     * SQL Server数据库 就是MSSQL
      */
     SQLSERVER("SQLSERVER", 26, "SQL", SQLServerJDBCAdapter.class),
 
@@ -160,6 +160,7 @@ public enum DatabaseEnum {
      */
     POLAR("POLAR", 31, "SQL", PolarJDBCAdapter.class);
 
+
     private final String name;
     private final int type;
     private final String databaseCategory;
@@ -168,10 +169,10 @@ public enum DatabaseEnum {
     /**
      * 构造函数用于初始化数据库枚举类型。
      *
-     * @param name 数据库名称
-     * @param type 数据库类型ID
+     * @param name             数据库名称
+     * @param type             数据库类型ID
      * @param databaseCategory 数据库分类
-     * @param adapterClass 适配器类
+     * @param adapterClass     适配器类
      */
     DatabaseEnum(String name, int type, String databaseCategory, Class adapterClass) {
         this.name = name;

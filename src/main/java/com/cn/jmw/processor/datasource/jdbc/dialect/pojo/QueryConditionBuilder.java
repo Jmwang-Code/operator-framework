@@ -4,6 +4,7 @@ package com.cn.jmw.processor.datasource.jdbc.dialect.pojo;
 import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLOperatorEnum;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class QueryConditionBuilder {
@@ -12,6 +13,11 @@ public class QueryConditionBuilder {
 
     public QueryConditionBuilder setOperator(SQLOperatorEnum operator) {
         this.operator = operator;
+        return this;
+    }
+
+    public QueryConditionBuilder addCondition(String field, SQLOperatorEnum operator) {
+        conditions.add(new QueryCondition(field, operator));
         return this;
     }
 

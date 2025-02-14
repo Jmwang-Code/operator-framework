@@ -1,11 +1,12 @@
 package com.cn.jmw.processor.datasource.pojo;
 
+import java.util.List;
+import java.util.Map;
+
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
 
 /**
  * DatabaseEntity类用于表示数据库的基本信息。
@@ -32,5 +33,5 @@ public class DatabaseEntity {
      *
      * @return List<TableEntity> 表对象的列表
      */
-    private List<TableEntity> tables;
+    private Map<String,TableEntity> tables;
 }

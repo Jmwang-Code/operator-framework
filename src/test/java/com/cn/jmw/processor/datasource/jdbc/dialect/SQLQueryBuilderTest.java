@@ -5,10 +5,9 @@ import com.cn.jmw.processor.datasource.jdbc.adapter.DorisJDBCAdapter;
 import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLFunctionEnum;
 import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLOperatorEnum;
 import com.cn.jmw.processor.datasource.jdbc.dialect.pojo.QueryCondition;
-import com.cn.jmw.processor.datasource.jdbc.dialect.pojo.QueryConditionBuilder;
 import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import org.jooq.*;
+import org.jooq.SQLDialect;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -39,7 +38,7 @@ public class SQLQueryBuilderTest {
         nestedQueryBuilder2
                 .addField("nested_field3", "nf3")
                 .addField("nested_field4", "nf4");
-        nestedQueryBuilder2.addAndCondition("nested_field3", SQLOperatorEnum.EQUAL, "value2");
+        nestedQueryBuilder2.addAndCondition("nested_field3", SQLOperatorEnum.IS_NULL);
 
         // 创建嵌套的查询条件
         QueryCondition nestedCondition1 = new QueryCondition("field11", SQLOperatorEnum.EQUAL, 11);
@@ -102,45 +101,42 @@ public class SQLQueryBuilderTest {
                 //SELECT field1 AS f1,field2 AS f2
                 // FROM main_table AS mt
                 .tableName("main_table", "mt")
-//                .addField("field1", "f1")
-//                .addField("field2", "f2")
-//                .addField("field3")
+                .addField("field1", "f1")
+                .addField("field2", "f2")
+                .addField("field3")
                 //WHERE
 //                .addNestingConditions(complexConditionA, complexConditionBANDC)
-//                .addOrCondition("field1", SQLOperatorEnum.EQUAL, 1)
+                .addOrCondition("field1", SQLOperatorEnum.EQUAL, 1)
                 .addOrCondition("field2", SQLOperatorEnum.IN, nestedQueryBuilder1)
                 .addOrCondition("field3", SQLOperatorEnum.EQUAL, nestedQueryBuilder2)
-                .addCondition(nestedCondition);
-//                .addCondition(outerCondition)
+                .addCondition(nestedCondition)
+                .addCondition(outerCondition)
         //JOIN
-//                .addJoin(LEFT_JOIN, "table2", "t2", "mt.field1 = t2.field1")
-//                .addJoin(INNER_JOIN, nestedQueryBuilder1, "nt1", "mt.field2 = nt1.nf1")
-//                .addJoin(RIGHT_JOIN, nestedQueryBuilder2, "nt2", "mt.field3 = nt2.nf3")
+                .addJoin(LEFT_JOIN, "table2", "t2", "mt.field1 = t2.field1")
+                .addJoin(INNER_JOIN, nestedQueryBuilder1, "nt1", "mt.field2 = nt1.nf1")
+                .addJoin(RIGHT_JOIN, nestedQueryBuilder2, "nt2", "mt.field3 = nt2.nf3")
         //GROUP BY
-//                .addGroup("field1")
-//                .addGroup("field2")
-//                .addGroup("field3")
+                .addGroup("field1")
+                .addGroup("field2")
+                .addGroup("field3")
         //HAVING
-//                .addHavingConditions(SQLFunctionEnum.COUNT, "field1", SQLOperatorEnum.GT, 1, SQLOperatorEnum.AND, Arrays.asList("关键是狗"))
-//                .addHavingConditions(SQLFunctionEnum.SUM, "field2", SQLOperatorEnum.LT, 10, SQLOperatorEnum.OR, Arrays.asList("信不信我让你飞起来"))
+                .addHavingConditions(SQLFunctionEnum.COUNT, "field1", SQLOperatorEnum.GT, 1, SQLOperatorEnum.AND, Arrays.asList("关键是狗"))
+                .addHavingConditions(SQLFunctionEnum.SUM, "field2", SQLOperatorEnum.LT, 10, SQLOperatorEnum.OR, Arrays.asList("信不信我让你飞起来"))
         //ORDER
-//                .addOrder("field1", SQLOperatorEnum.ASC)
-//                .addOrder("field2", SQLOperatorEnum.DESC)
-//                .addOrder("field3", SQLOperatorEnum.ASC)
+                .addOrder("field1", SQLOperatorEnum.ASC)
+                .addOrder("field2", SQLOperatorEnum.DESC)
+                .addOrder("field3", SQLOperatorEnum.ASC)
 //                //LIMIT OFFSET
-//                .limit(100)
-//                .offset(10);
+                .limit(100)
+                .offset(10);
 
         String jsonString = DorisJDBCAdapter.objectMapper.writeValueAsString(queryBuilderX);
 
         // 最后，调用 buildSQL 方法来生成 SQL 语句
         long l = System.currentTimeMillis();
-        String sql = queryBuilderX.buildSQL();
 //        System.out.println("执行耗时：" + (System.currentTimeMillis() - l) + "ms");
-        System.out.println(sql);
-        System.out.println(queryBuilderX.buildQuerySQLResult().getSql());
-        System.out.println(queryBuilderX.buildQuerySQLResult().getData().length);
-//        adapter.getDialectSQL(queryBuilder);
+        System.out.println(queryBuilderX.buildSQL());
+        System.out.println(queryBuilderX.buildQuerySQLResult());
     }
 
     @Test
@@ -208,7 +204,7 @@ public class SQLQueryBuilderTest {
     public void 文本注入_错误消息注入() {
         String s = new SQLQueryBuilder()
                 .tableName("bds_asset_info")
-                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT 1/0; --")
+                .addOrCondition("asset_category", SQLOperatorEnum.NOT_EQUAL, "''; SELECT 1/0; --")
                 .buildSQL();
         System.out.println(s);
         //select * from `bds_asset_info` where `asset_category` = ''; SELECT 1/0; --
@@ -295,11 +291,11 @@ public class SQLQueryBuilderTest {
     //布尔注入.基于恶意关键字的注入
     @Test
     public void 布尔注入_基于恶意关键字的注入() {
-        String s = new SQLQueryBuilder()
+        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder()
                 .tableName("bds_asset_info")
-                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "'admin'; DROP TABLE users; --")
-                .buildSQL();
-        System.out.println(s);
+                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "'admin'; DROP TABLE users; --");
+        System.out.println(sqlQueryBuilder.buildSQL());
+        System.out.println(sqlQueryBuilder.buildQuerySQLResult());
         //select * from `bds_asset_info` where `asset_category` = "'admin' OR 1=1"
         //成功防止sql注入
     }
@@ -307,11 +303,11 @@ public class SQLQueryBuilderTest {
     //基于除零错误的注入
     @Test
     public void 布尔注入_基于除零错误的注入() {
-        String s = new SQLQueryBuilder()
+        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder()
                 .tableName("bds_asset_info")
-                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT 1/0; --")
-                .buildSQL();
-        System.out.println(s);
+                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT 1/0; --");
+        System.out.println(sqlQueryBuilder.buildSQL());
+        System.out.println(sqlQueryBuilder.buildQuerySQLResult());
         //select * from `bds_asset_info` where `asset_category` = "''; SELECT 1/0; --"
         //成功防止sql注入
     }
@@ -319,11 +315,11 @@ public class SQLQueryBuilderTest {
     //基于索引错误的注入
     @Test
     public void 布尔注入_基于索引错误的注入() {
-        String s = new SQLQueryBuilder()
+        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder()
                 .tableName("bds_asset_info")
-                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT * FROM bds_asset_info; --")
-                .buildSQL();
-        System.out.println(s);
+                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT * FROM bds_asset_info; --");
+        System.out.println(sqlQueryBuilder.buildSQL());
+        System.out.println(sqlQueryBuilder.buildQuerySQLResult());
         //select * from `bds_asset_info` where `asset_category` = "''; SELECT * FROM bds_asset_info; --"
         //成功防止sql注入
     }
@@ -331,11 +327,11 @@ public class SQLQueryBuilderTest {
     //基于类型转换错误的注入
     @Test
     public void 布尔注入_基于类型转换错误的注入() {
-        String s = new SQLQueryBuilder()
+        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder()
                 .tableName("bds_asset_info")
-                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT CONVERT(1, INT); --")
-                .buildSQL();
-        System.out.println(s);
+                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT CONVERT(1, INT); --");
+        System.out.println(sqlQueryBuilder.buildSQL());
+        System.out.println(sqlQueryBuilder.buildQuerySQLResult());
         //select * from `bds_asset_info` where `asset_category` = "''; SELECT CONVERT(1, INT); --"
         //成功防止sql注入
     }
@@ -343,11 +339,12 @@ public class SQLQueryBuilderTest {
     //基于执行存储过程的注入
     @Test
     public void 布尔注入_基于执行存储过程的注入() {
-        String s = new SQLQueryBuilder()
+        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder()
                 .tableName("bds_asset_info")
-                .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; CALL sp_test(); --")
-                .buildSQL();
-        System.out.println(s);
+                .addAndCondition("asset_category", SQLOperatorEnum.IS_NOT_NULL);
+
+        System.out.println(sqlQueryBuilder.buildSQL());
+        System.out.println(sqlQueryBuilder.buildQuerySQLResult());
         //select * from `bds_asset_info` where `asset_category` = "''; CALL sp_test(); --"
         //成功防止sql注入
     }
@@ -383,9 +380,17 @@ public class SQLQueryBuilderTest {
                 .addCondition(queryCondition);
 
         System.out.println(queryBuilder.buildSQL());
+        System.out.println(queryBuilder.buildQuerySQLResult());
         assertEquals(null, queryBuilder.buildSQL());
     }
 
+    /**
+     * 这既使用嵌套的方式又将嵌套的QueryCondition 上增加并列条件是不被允许的
+     *
+     *         queryCondition.setField("XXXX");
+     *         queryCondition.setOperator(SQLOperatorEnum.EQUAL);
+     *         queryCondition.setValue("YYYY");
+     */
     @Test
     public void 多层Condition嵌套测试() {
 
@@ -404,21 +409,23 @@ public class SQLQueryBuilderTest {
                 .addCondition(queryCondition);
 
         System.out.println(queryBuilder.buildSQL());
+        System.out.println(queryBuilder.buildQuerySQLResult());
 
 
-        SQLQueryBuilder queryBuilder1 = new SQLQueryBuilder()
-                .tableName("a")
-                .addCondition(
-                        new QueryCondition(SQLOperatorEnum.AND,
-                                new QueryCondition(SQLOperatorEnum.OR,
-                                        new QueryCondition("event_time", SQLOperatorEnum.GT, "2024-04-10 00:00:00"),
-                                        new QueryCondition("event_time", SQLOperatorEnum.GT, "2024-04-10 00:00:00")),
-                                new QueryCondition(SQLOperatorEnum.OR,
-                                        new QueryCondition("event_time", SQLOperatorEnum.GT, "2024-04-10 00:00:00"),
-                                        new QueryCondition("event_time", SQLOperatorEnum.GT, "2024-04-10 00:00:00")))
-                );
-
-        System.out.println(queryBuilder1.buildSQL());
+//        SQLQueryBuilder queryBuilder1 = new SQLQueryBuilder()
+//                .tableName("a")
+//                .addCondition(
+//                        new QueryCondition(SQLOperatorEnum.AND,
+//                                new QueryCondition(SQLOperatorEnum.OR,
+//                                        new QueryCondition("event_time", SQLOperatorEnum.GT, "2024-04-10 00:00:00"),
+//                                        new QueryCondition("event_time", SQLOperatorEnum.GT, "2024-04-11 00:00:00")),
+//                                new QueryCondition(SQLOperatorEnum.OR,
+//                                        new QueryCondition("event_time", SQLOperatorEnum.GT, "2024-04-12 00:00:00"),
+//                                        new QueryCondition("event_time", SQLOperatorEnum.GT, "2024-04-13 00:00:00")))
+//                );
+//
+//        System.out.println(queryBuilder1.buildSQL());
+//        System.out.println(queryBuilder1.buildQuerySQLResult());
 
     }
 
@@ -428,7 +435,7 @@ public class SQLQueryBuilderTest {
                 .tableName("a")
                 .addField("a", "B", DISTINCT)
                 .addCondition("DBname", SQLOperatorEnum.LIKE, "b", SQLOperatorEnum.OR)
-                .addCondition("DBname", SQLOperatorEnum.LIKE, "b", SQLOperatorEnum.OR)
+                .addCondition("DBname", SQLOperatorEnum.LIKE, "value_with_special_characters_like_\'a_and_%", SQLOperatorEnum.OR)
                 .addCondition("A", SQLOperatorEnum.MATCH_ANY, "b", SQLOperatorEnum.AND)
                 .addCondition("A", SQLOperatorEnum.MATCH_ANY, "b", SQLOperatorEnum.OR);
         String key = "DBname";
@@ -439,6 +446,64 @@ public class SQLQueryBuilderTest {
         System.out.println(sqlQueryBuilder.buildSQL());
         System.out.println(sqlQueryBuilder.buildQuerySQLResult());
 
+    }
+
+    @Test
+    public void 测试嵌套查询() {
+        SQLQueryBuilder sqlQueryBuilderSubA = new SQLQueryBuilder()
+                .tableName("平部表")
+                .addAndCondition("字段平", SQLOperatorEnum.EQUAL, "平\"");
+
+        // list=[中", 内", 平", A']
+        //中 内 平 A
+        //中 平 A
+        SQLQueryBuilder sqlQueryBuilderSubSub = new SQLQueryBuilder()
+                .tableName("内部表")
+                .addAndCondition("字段内", SQLOperatorEnum.EQUAL, "内\"");
+
+        SQLQueryBuilder sqlQueryBuilderSub = new SQLQueryBuilder()
+                .tableName("中部表")
+                .addAndCondition("字段中", SQLOperatorEnum.EQUAL, "中\"")
+                .addAndCondition("B",SQLOperatorEnum.EQUAL,sqlQueryBuilderSubSub);
+
+        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder()
+                .tableName(sqlQueryBuilderSub,"TABLEA")
+                .addAndCondition("字段外", SQLOperatorEnum.EQUAL, sqlQueryBuilderSubA)
+                .addAndCondition("A", SQLOperatorEnum.EQUAL, "A'");
+
+        System.out.println(sqlQueryBuilder.buildSQL());
+
+        System.out.println(sqlQueryBuilder.buildQuerySQLResult());
+
+    }
+
+    @Test
+    public void 测试模式名称() {
+        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder()
+                .tableName("Employees")
+                .schemaName("dbo")
+                .dbName("master")
+                .addField("Email");
+        System.out.println(sqlQueryBuilder.buildSQL().replaceAll("`",""));
+    }
+
+    @Test
+    public void 测试OR字符串Condition(){
+        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder()
+                .tableName("Employees")
+//                .addOrCondition("a", SQLOperatorEnum.EQUAL, "b")
+//                .addOrCondition("c", SQLOperatorEnum.EQUAL, "bddd")
+                .addOrStringCondition("c = 'd'")
+                .addOrStringCondition("A = 'd'");
+        System.out.println(sqlQueryBuilder.buildSQL().replaceAll("`",""));
+
+        SQLQueryBuilder sqlQueryBuilder2 = new SQLQueryBuilder()
+                .tableName("Employees")
+//                .addAndCondition("a", SQLOperatorEnum.EQUAL, "b")
+//                .addAndCondition("c", SQLOperatorEnum.EQUAL, "bddd")
+                .addStringCondition("c = 'd'")
+                .addStringCondition("A = 'd'");
+        System.out.println(sqlQueryBuilder2.buildSQL().replaceAll("`",""));
     }
 }
 

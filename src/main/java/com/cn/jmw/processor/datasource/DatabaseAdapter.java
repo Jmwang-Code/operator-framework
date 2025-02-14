@@ -2,7 +2,6 @@ package com.cn.jmw.processor.datasource;
 
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
-
 import java.util.List;
 
 /**
@@ -44,6 +43,13 @@ public interface DatabaseAdapter {
      * @return 数据库实体列表，包含数据库中的表信息
      */
     List<DatabaseEntity> getDatabaseMetadata();
+
+    /**
+     * 获取数据库的元数据。
+     *
+     * @return 数据库实体列表，包含数据库中的表信息
+     */
+    List<DatabaseEntity> getDatabaseMetadata(String dbName);
 
     /**
      * 获取数据库版本信息。

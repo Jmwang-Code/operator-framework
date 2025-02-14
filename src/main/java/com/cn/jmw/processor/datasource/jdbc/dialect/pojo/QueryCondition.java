@@ -6,8 +6,8 @@ import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLOperatorEnum;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.jooq.Record;
 import org.jooq.*;
+import org.jooq.Record;
 import org.jooq.impl.DSL;
 
 import java.util.ArrayList;
@@ -23,6 +23,10 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 public class QueryCondition {
+
+    @JsonProperty("TableName")
+    // 参与查询的表名
+    private String tableName;
 
     @JsonProperty("Field")
     // 参与查询的字段名
@@ -64,6 +68,7 @@ public class QueryCondition {
      * @param functionParams   函数参数列表
      */
     public QueryCondition(
+            String tableName,
             String field,
             SQLOperatorEnum operator,
             Object value,
@@ -72,6 +77,7 @@ public class QueryCondition {
             SQLFunctionEnum function,
             List<Object> functionParams
     ) {
+        this.tableName = tableName;
         this.field = field;
         this.operator = operator;
         this.value = value;
@@ -86,12 +92,32 @@ public class QueryCondition {
      *
      * @param field    查询字段名
      * @param operator 查询操作符
+     */
+    public QueryCondition(String field, SQLOperatorEnum operator) {
+        this(null, field, operator, null, null, SQLOperatorEnum.AND, null, null);
+    }
+
+    /**
+     * 构造函数，创建一个AND条件的QueryCondition实例。
+     *
+     * @param field    查询字段名
+     * @param operator 查询操作符
      * @param value    查询条件的值
      */
     public QueryCondition(String field, SQLOperatorEnum operator, Object value) {
-        this(field, operator, value, null, SQLOperatorEnum.AND, null, null);
+        this(null, field, operator, value, null, SQLOperatorEnum.AND, null, null);
     }
 
+    /**
+     * 构造函数，创建一个AND条件的QueryCondition实例。
+     *
+     * @param field    查询字段名
+     * @param operator 查询操作符
+     * @param value    查询条件的值
+     */
+    public QueryCondition(String tableName, String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum joinOperator) {
+        this(tableName, field, operator, value, null, joinOperator, null, null);
+    }
     /**
      * 构造函数，创建一个（AND/OR）条件的QueryCondition实例。
      *
@@ -101,7 +127,7 @@ public class QueryCondition {
      * @param joinOperator 连接操作符（AND/OR）
      */
     public QueryCondition(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum joinOperator) {
-        this(field, operator, value, null, joinOperator, null, null);
+        this(null, field, operator, value, null, joinOperator, null, null);
     }
 
     /**
@@ -111,7 +137,7 @@ public class QueryCondition {
      * @param joinOperator     连接操作符（AND/OR）
      */
     public QueryCondition(List<QueryCondition> nestedConditions, SQLOperatorEnum joinOperator) {
-        this(null, null, null, nestedConditions, joinOperator, null, null);
+        this(null, null, null, null, nestedConditions, joinOperator, null, null);
     }
 
     /**
@@ -125,7 +151,7 @@ public class QueryCondition {
      * @param functionParams 函数参数列表
      */
     public QueryCondition(SQLFunctionEnum function, String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum joinOperator, List<Object> functionParams) {
-        this(field, operator, value, null, joinOperator, function, functionParams);
+        this(null, field, operator, value, null, joinOperator, function, functionParams);
     }
 
     /**
@@ -161,7 +187,7 @@ public class QueryCondition {
     }
 
     public QueryCondition(SQLOperatorEnum joinOperator, QueryCondition... nestedConditions) {
-        this(null, null, null, Arrays.asList(nestedConditions), joinOperator, null, null);
+        this(null, null, null, null, Arrays.asList(nestedConditions), joinOperator, null, null);
     }
 
     /**
@@ -252,99 +278,6 @@ public class QueryCondition {
             }else {
                 return nestedCondition;
             }
-            // 检查当前层条件是否有效，如果无效则返回嵌套条件
-//            if (field != null && operator != null && value != null) {
-//                Field<Object> fieldExpression = buildConditionAsField();
-//                Condition currentCondition = null;
-//                switch (operator) {
-//                    case EQUAL:
-//                        currentCondition = fieldExpression.eq(handleValue(value, query, dataList));
-//                        break;
-//                    case NOT_EQUAL:
-//                        currentCondition = fieldExpression.ne(handleValue(value, query, dataList));
-//                        break;
-//                    case GT:
-//                        currentCondition = fieldExpression.gt(handleValue(value, query, dataList));
-//                        break;
-//                    case LT:
-//                        currentCondition = fieldExpression.lt(handleValue(value, query, dataList));
-//                        break;
-//                    case GE:
-//                        currentCondition = fieldExpression.ge(handleValue(value, query, dataList));
-//                        break;
-//                    case LE:
-//                        currentCondition = fieldExpression.le(handleValue(value, query, dataList));
-//                        break;
-//                    case LIKE:
-//                        dataList.add(value.toString());
-//                        currentCondition = fieldExpression.like(DSL.val(value.toString()));
-//                        break;
-//                    case NOT_LIKE:
-//                        dataList.add(value.toString());
-//                        currentCondition = fieldExpression.notLike(DSL.val(value.toString()));
-//                        break;
-//                    case IN_FILE:
-//                    case IN:
-//                        if (value instanceof List<?>) {
-//                            currentCondition = fieldExpression.in(((List<?>) value).toArray());
-//                        } else if (value instanceof Object[]) {
-//                            currentCondition = fieldExpression.in((Object[]) value);
-//                        } else if (value instanceof SQLQueryBuilder) {
-//                            SQLQueryBuilder subQuery = (SQLQueryBuilder) value;
-//                            QuerySQLResult querySQLResult = subQuery.buildQuerySQLResult();
-//                            dataList.addAll(querySQLResult.getList());
-////                            currentCondition = fieldExpression.in(DSL.field(subQuery.buildSubQuerySQL(DSL.using(query.configuration()))));
-//                            currentCondition = fieldExpression.in(DSL.field(querySQLResult.getSql()));
-//                        } else if (value instanceof String) {
-//                            currentCondition = fieldExpression.in(value);
-//                        } else {
-//                            throw new IllegalArgumentException("“in”运算符的值必须是列表或数组");
-//                        }
-//                        break;
-//                    case NOT_IN_FILE:
-//                    case NOT_IN:
-//                        if (value instanceof List<?>) {
-//                            currentCondition = fieldExpression.notIn(((List<?>) value).toArray());
-//                        } else if (value instanceof Object[]) {
-//                            currentCondition = fieldExpression.notIn((Object[]) value);
-//                        } else if (value instanceof SQLQueryBuilder) {
-//                            SQLQueryBuilder subQuery = (SQLQueryBuilder) value;
-//                            QuerySQLResult querySQLResult = subQuery.buildQuerySQLResult();
-//                            dataList.addAll(querySQLResult.getList());
-////                            currentCondition = fieldExpression.notIn(DSL.field(subQuery.buildSubQuerySQL(DSL.using(query.configuration()))));
-//                            currentCondition = fieldExpression.in(DSL.field(querySQLResult.getSql()));
-//                        } else if (value instanceof String) {
-//                            currentCondition = fieldExpression.in(value);
-//                        } else {
-//                            throw new IllegalArgumentException("“in”运算符的值必须是列表或数组");
-//                        }
-//                        break;
-//                    /**
-//                     * 当使用特殊语言操作符号的时候会产生问题
-//                     * 1.就是无法生成占位符SQL对应的Data值
-//                     */
-//                    case MATCH_ANY:
-//                        SQL raw = DSL.raw("`" + field + "` " + SQLOperatorEnum.MATCH_ANY.getOperator() + " '" + value + "'");
-//                        currentCondition = DSL.condition(raw);
-//                        break;
-//                    case MATCH_ALL:
-//                        SQL raw2 = DSL.raw("`" + field + "` " + SQLOperatorEnum.MATCH_ALL.getOperator() + " '" + value + "'");
-//                        currentCondition = DSL.condition(raw2);
-//                        break;
-//                    default:
-//                        throw new UnsupportedOperationException("不支持的操作: " + operator);
-//                }
-//                if (nestedCondition != null) {
-//                    if (joinOperator == SQLOperatorEnum.AND) {
-//                        return DSL.condition(currentCondition).and(nestedCondition);
-//                    } else if (joinOperator == SQLOperatorEnum.OR) {
-//                        return DSL.condition(currentCondition).or(nestedCondition);
-//                    }
-//                }
-//                return DSL.condition(currentCondition);
-//            } else {
-//                return nestedCondition;
-//            }
         } else {
             Condition currentCondition = DSL.trueCondition();
             // 处理当前层条件
@@ -381,8 +314,10 @@ public class QueryCondition {
                     case IN:
                         if (value instanceof List<?>) {
                             currentCondition = fieldExpression.in(((List<?>) value).toArray());
+                            dataList.addAll((List<?>)value);
                         } else if (value instanceof Object[]) {
                             currentCondition = fieldExpression.in((Object[]) value);
+                            dataList.addAll(Arrays.stream((Object[]) value).toList());
                         } else if (value instanceof SQLQueryBuilder) {
                             SQLQueryBuilder subQuery = (SQLQueryBuilder) value;
                             //说明是要占位符
@@ -391,7 +326,11 @@ public class QueryCondition {
 //                            currentCondition = fieldExpression.in(DSL.field(subQuery.buildSubQuerySQL(DSL.using(query.configuration()))));
                             currentCondition = fieldExpression.in(DSL.field(querySQLResult.getSql()));
                         } else if (value instanceof String) {
+                            dataList.add(value);
                             currentCondition = fieldExpression.in(value);
+                        } else if (value instanceof Long){
+                            dataList.add(value);
+                            currentCondition = fieldExpression.in((Long) value);
                         } else {
                             throw new IllegalArgumentException("“in”运算符的值必须是列表或数组");
                         }
@@ -425,6 +364,17 @@ public class QueryCondition {
                     case MATCH_ALL:
                         SQL raw2 = DSL.raw("`" + field + "` " + SQLOperatorEnum.MATCH_ALL.getOperator() + " '" + value + "'");
                         currentCondition = DSL.condition(raw2);
+                        break;
+                    default:
+                        throw new UnsupportedOperationException("不支持的操作: " + operator);
+                }
+            }else if (field != null && operator != null) {
+                switch (operator) {
+                    case IS_NULL:
+                        currentCondition = fieldExpression.isNull();
+                        break;
+                    case IS_NOT_NULL:
+                        currentCondition = fieldExpression.isNotNull();
                         break;
                     default:
                         throw new UnsupportedOperationException("不支持的操作: " + operator);

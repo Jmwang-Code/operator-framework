@@ -2,6 +2,7 @@ package com.cn.jmw.processor.datasource;
 
 import com.cn.jmw.processor.datasource.pojo.ShowTableStatusResult;
 
+import java.sql.Connection;
 import java.util.List;
 import java.util.Map;
 
@@ -45,4 +46,27 @@ public interface SystemCommandLanguage {
      * @return 最早和最迟进入库中的数据天数差
      */
     int getEarliestAndLatestDays(String tableName,String sortTimeField);
+
+    /**
+     * 获取索引
+     *
+     * @param dbName 数据库
+     * @param tableName 数据表
+     * @return 索引
+     */
+    Map<String,Map<String, Object>> getIndexInfo(Connection connection, String dbName, String tableName);
+
+    /**
+     * 获取主键
+     *
+     * @param dbName 数据库
+     * @param tableName 数据表
+     * @return 主键
+     */
+    List<Map<String, Object>> getPrimaryKeyInfo(String dbName,String tableName);
+
+    /**
+     *  获取验证语句
+     */
+    String getValidationQuery();
 }

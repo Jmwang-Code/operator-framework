@@ -1,4 +1,4 @@
-package com.cn.jmw.processor.datasource.jdbc.inter.export;
+package com.cn.jmw.processor.datasource.jdbc.inter.doris.export;
 
 import com.cn.jmw.processor.datasource.pojo.ShowExport;
 

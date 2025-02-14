@@ -1,20 +1,30 @@
 package com.cn.jmw.processor.datasource.jdbc.adapter;
 
+import com.cn.jmw.common.exception.ServiceException;
+import com.cn.jmw.pojo.SQLQueryMontage;
+import com.cn.jmw.pojo.SampleResult;
 import com.cn.jmw.processor.datasource.JDBCAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.enums.FileTypeEnum;
+import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLOperatorEnum;
+import com.cn.jmw.processor.datasource.jdbc.inter.doris.ADBC;
+import com.cn.jmw.processor.datasource.jdbc.inter.doris.ADBCQueryResultHandler;
+import com.cn.jmw.processor.datasource.jdbc.inter.doris.export.ASynExport;
+import com.cn.jmw.processor.datasource.jdbc.inter.doris.Doris;
+import com.cn.jmw.processor.datasource.jdbc.inter.doris.export.SynExport;
 import com.cn.jmw.processor.datasource.factory.DatabaseAdapterFactory;
 import com.cn.jmw.processor.datasource.instantiation.Instantiation;
+import com.cn.jmw.processor.datasource.jdbc.inter.doris.pojo.ProcessListPojo;
+import com.cn.jmw.processor.datasource.pojo.*;
 import com.cn.jmw.processor.datasource.jdbc.dialect.Dialect;
 import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
-import com.cn.jmw.processor.datasource.jdbc.inter.Doris;
-import com.cn.jmw.processor.datasource.jdbc.inter.export.ASynExport;
-import com.cn.jmw.processor.datasource.jdbc.inter.export.SynExport;
-import com.cn.jmw.processor.datasource.pojo.*;
+import com.alibaba.fastjson.JSONArray;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +38,16 @@ import net.bytebuddy.implementation.bytecode.StackManipulation;
 import net.bytebuddy.jar.asm.MethodVisitor;
 import net.bytebuddy.jar.asm.Opcodes;
 import net.bytebuddy.jar.asm.Type;
+import org.apache.arrow.adbc.core.*;
+import org.apache.arrow.adbc.driver.flightsql.FlightSqlDriver;
+import org.apache.arrow.flight.Location;
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.memory.RootAllocator;
+import org.apache.arrow.vector.FieldVector;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.commons.codec.binary.Base64;
+import com.cn.jmw.processor.datasource.jdbc.inter.ResultSetHandler;
 import org.apache.commons.dbutils.handlers.MapListHandler;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpHeaders;
@@ -47,14 +66,19 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
-import java.sql.Date;
 import java.sql.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.Date;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-
+import static com.cn.jmw.common.exception.enums.StructuredErrorCodeConstants.*;
+import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
 
 @Slf4j
 public class DorisJDBCAdapter extends JDBCAdapter implements
@@ -67,10 +91,22 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
         //异步导出
         ASynExport,
         //Doris特性功能 比如StreamLoad、RoutineLoad
-        Doris {
+        Doris,
+        //ADBC协议
+        ADBC {
 
     // DORIS HTTP PORT
     private static final int DORIS_HTTP_PORT = 8030;
+
+    private static final int DORIS_JDBC_PORT = 9030;
+
+    private static final int DORIS_ADBC_FE_PORT = 8815;
+
+    private static final int DORIS_ADBC_BE_PORT = 8816;
+
+    private final FlightSqlDriver driver;
+
+    private final Map<String, Object> parameters = new HashMap<>();
 
     /**
      * 构造函数用于创建DorisJDBCAdapter实例。
@@ -81,9 +117,24 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
      * @param username     用户名
      * @param password     密码
      */
-    public DorisJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password) {
-        super(hostname, port, databaseName, username, password);
+    public DorisJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password, JDBCAdapterDataSourceConfig config, String connectionUser) throws AdbcException {
+        super(hostname, port, databaseName, username, password, config, connectionUser);
+
+        final BufferAllocator allocator = new RootAllocator();
+        this.driver = new FlightSqlDriver(allocator);
+        AdbcDriver.PARAM_URI.set(parameters, Location.forGrpcInsecure(super.hostname, DORIS_ADBC_FE_PORT).getUri().toString());
+        AdbcDriver.PARAM_USERNAME.set(parameters, super.username);
+        AdbcDriver.PARAM_PASSWORD.set(parameters, super.password);
     }
+
+    public DorisJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password, JDBCAdapterDataSourceConfig config) throws AdbcException {
+        this(hostname, port, databaseName, username, password, config, null);
+    }
+
+    public DorisJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password) throws AdbcException {
+        this(hostname, port, databaseName, username, password, new JDBCAdapterDataSourceConfig(), null);
+    }
+
 
     /**
      * 获取Doris的连接字符串。
@@ -94,7 +145,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
     public String getConnectionString() {
         return "jdbc:mysql://" + super.hostname + ":" + super.port + "/" + super.databaseName
                 + "?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&autoReconnect=true&nullCatalogMeansCurrent=true" +
-                "&connectTimeout=100000&socketTimeout=600000&autoReconnect=true";
+                "&connectTimeout=100000000&socketTimeout=600000000&autoReconnect=true";
     }
 
     /**
@@ -106,8 +157,29 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
      * @throws SQLException 如果发生SQL错误
      */
     public List<Map<String, Object>> executeDMLC(String sql, Object[] params) throws SQLException {
-        return super.runner.query(pool.getConnection(hostname + port + databaseName), sql, new MapListHandler(), params);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser)) {
+            if (connection == null) {
+                throw new SQLException("未能获得有效连接.");
+            }
+            return super.runner.query(connection, sql, new MapListHandler(), params);
+        } catch (SQLException e) {
+            log.error("执行DMLC查询失败： ", e);
+            throw e;
+        }
     }
+
+    /**
+     * 当存在大批量的输入最好在外部定义一个Connection 公用它
+     *
+     * @param sql    要执行的SQL查询语句
+     * @param params 查询参数数组，可能为null
+     * @throws SQLException 如果数据库访问错误或其他错误
+     */
+    @Override
+    public List<Map<String, Object>> executeDMLC(Connection connection, String sql, Object[] params) throws SQLException {
+        return super.runner.query(connection, sql, new MapListHandler(), params);
+    }
+
 
     /**
      * 执行批量查询操作，尚未实现。
@@ -119,7 +191,11 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
      */
     @Override
     public int executeDMLRUD(String sql, Object[] params) throws SQLException {
-        return super.runner.update(pool.getConnection(hostname + port + databaseName), sql, params);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser)) {
+            return super.runner.update(connection, sql, params);
+        } catch (SQLException e) {
+            throw new SQLException("执行更新失败: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -132,9 +208,9 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
      */
     @Override
     public void executeDDL(String sql, Object[] params) throws SQLException {
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
              PreparedStatement statement = connection.prepareStatement(sql)) {
-            // Set parameters if any
+            // 设置参数（如果有）
             if (params != null) {
                 for (int i = 0; i < params.length; i++) {
                     statement.setObject(i + 1, params[i]);
@@ -142,14 +218,13 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
             }
             statement.execute();
         } catch (SQLException e) {
-            throw new SQLException("Error executing DDL: " + e.getMessage(), e);
+            throw new SQLException("执行DDL时出错: " + e.getMessage(), e);
         }
     }
 
-
     @Override
     public List<String> getIgnoreDatabaseList() {
-        return Arrays.asList("information_schema", "__internal_schema");
+        return Arrays.asList("information_schema", "__internal_schema", "mysql", "test");
     }
 
     @Override
@@ -173,11 +248,13 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
     static {
         JavaTimeModule module = new JavaTimeModule();
         module.addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-        objectMapper.registerModule(module);
-        objectMapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-        objectMapper.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+        objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);// 用于在序列化空 Java Bean 时不抛出异常，即使对象中没有任何属性，也不会导致序列化失败。
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);// 反序列化时忽略未在目标类中定义的属性，避免由于 JSON 数据中有多余字段而抛出异常
+        objectMapper.registerModule(module);// 解决 LocalDateTime 的序列化
+        objectMapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);// 驼峰命名
+        objectMapper.setSerializationInclusion(JsonInclude.Include.NON_EMPTY); // 忽略 null 值和空字符串
 
-        fullFieldObjectMapper.registerModule(module);
+        fullFieldObjectMapper.registerModule(module);// 解决 LocalDateTime 的序列化
         fullFieldObjectMapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     }
 
@@ -209,8 +286,13 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
 
         try (CloseableHttpClient client = httpClientBuilder.build()) {
             HttpPut put = new HttpPut(url);
+            //开启DEBUG日志 --debug
+//            put.setHeader("debug", "true"); // Enable debug logging
+
             put.setHeader(HttpHeaders.EXPECT, "100-continue");
             put.setHeader(HttpHeaders.AUTHORIZATION, basicAuthHeader(username, password));
+            put.setHeader("max_filter_ratio", "1");
+//            put.setHeader("strict_mode", "false");
 
             // 可以在 Header 中设置 stream load 相关属性，这里我们设置 label 和 column_separator。
             Calendar calendar = Calendar.getInstance();
@@ -243,25 +325,25 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
 
             // 设置导入文件。
             switch (importFileType) {
-                case FileTypeEnum.CSV_WITH_NAMES: {
+                case CSV_WITH_NAMES: {
                     File file = new File(data); // data应该是CSV文件的路径
                     FileEntity entity = new FileEntity(file, ContentType.create("text/csv", StandardCharsets.UTF_8));
                     put.setEntity(entity);
                     break;
                 }
-                case FileTypeEnum.JSON: {
+                case JSON: {
                     // 这里也可以使用 StringEntity 来传输任意数据。
                     StringEntity entity = new StringEntity(data, StandardCharsets.UTF_8);
                     put.setEntity(entity);
                     break;
                 }
-                case FileTypeEnum.ORC: {
+                case ORC: {
                     File orcFile = new File(data); // data应为ORC文件的路径
                     FileEntity orcEntity = new FileEntity(orcFile, ContentType.create("application/octet-stream"));
                     put.setEntity(orcEntity);
                     break;
                 }
-                case FileTypeEnum.PARQUET: {
+                case PARQUET: {
                     File parquetFile = new File(data); // data应为Parquet文件的路径
                     FileEntity parquetEntity = new FileEntity(parquetFile, ContentType.create("application/octet-stream"));
                     put.setEntity(parquetEntity);
@@ -298,7 +380,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
                                      String columnsTerminatedBy, String columns, String kafkaBrokerList,
                                      String kafkaTopic, String groupId, String kafkaPartitions,
                                      String kafkaOffsets, FileTypeEnum fileTypeEnum) {
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
              Statement statement = connection.createStatement()) {
             StringBuilder stringBuilder = new StringBuilder();
             stringBuilder.append("CREATE ROUTINE LOAD ").append(databaseName + "." + routineLoadName + " ON " + targetTableName + "\n");
@@ -383,16 +465,17 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
 
     @Override
     public List<RoutineLoadResult> showRoutineLoadFor(String routineLoadName) {
+        StringBuilder stringBuilder = new StringBuilder();
+        if (StringUtils.isBlank(routineLoadName)) {
+            stringBuilder.append("SHOW ROUTINE LOAD");
+        } else {
+            stringBuilder.append("SHOW ROUTINE LOAD FOR ").append(routineLoadName + ";");
+        }
         List<RoutineLoadResult> routineLoadResults = new ArrayList<>();
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
-             Statement statement = connection.createStatement()) {
-            StringBuilder stringBuilder = new StringBuilder();
-            if (StringUtils.isBlank(routineLoadName)) {
-                stringBuilder.append("SHOW ROUTINE LOAD");
-            } else {
-                stringBuilder.append("SHOW ROUTINE LOAD FOR ").append(routineLoadName + ";");
-            }
-            ResultSet resultSet = statement.executeQuery(stringBuilder.toString());
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
+             Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(stringBuilder.toString());) {
+
             while (resultSet.next()) {
                 RoutineLoadResult result = RoutineLoadResult.builder()
                         .id(resultSet.getLong("Id"))
@@ -454,9 +537,28 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
                 continue;
             }
 
-            if (showPartitionResults.size() < 2){
+            if (showPartitionResults.size() < 2) {
                 log.info("数据表阈值清理————表名: {}, 分区不存在或者分区数量达不到清理最小值2", tableName);
                 continue;
+            }
+
+            // 检查分区数量是否超过 180
+            if (showPartitionResults.size() > 180) {
+                log.info("数据表阈值清理————表名: {}, 当前分区数量: {}, 超过限制 180", tableName, showPartitionResults.size());
+                while (showPartitionResults.size() > 180) {
+                    ShowPartitionResult earliestPartition = showPartitionResults.get(0);
+                    String partitionName = earliestPartition.getPartitionName();
+                    String sqlDelete = String.format("alter table %s.%s drop partition %s;", DBName, tableName, partitionName);
+
+                    try {
+                        executeDDL(sqlDelete, null);
+                        log.info("数据表阈值清理————删除最早分区: {}, 表名: {}", partitionName, tableName);
+                        showPartitionResults.remove(earliestPartition);
+                    } catch (SQLException e) {
+                        log.error("数据表阈值清理————处理表: {}, 异常信息: {}", tableName, e.getMessage());
+                        return false;
+                    }
+                }
             }
 
             //curSizes当前大小 rowsCounts行数
@@ -476,8 +578,6 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
             double curSizes = showTableStatusResult.getDataLength();
             //curSizes当前大小要做计算从b换算成GB
             curSizes = curSizes / 1024 / 1024 / 1024;
-            //avgRowSize平均数据大小
-            Long avgRowSize = showTableStatusResult.getAvgRowLength();
 
             //阈值之下就通过
             if (curSizes < allowSize) {
@@ -493,12 +593,12 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
 
             double newCurSizes = curSizes;
             while (newCurSizes > allowSize) {
-                    sqlDelete = String.format(DBName, tableName, partitionName);
+                sqlDelete = String.format(sqlDelete, DBName, tableName, partitionName);
 
                 try {
                     executeDDL(sqlDelete, null);
                     log.info("数据表阈值清理————正在处理表: {}", tableName);
-                    executeDDL("drop "+DBName+"/"+tableName+"/"+partitionName, null);
+                    executeDDL("drop " + DBName + "/" + tableName + "/" + partitionName, null);
                 } catch (SQLException e) {
                     log.error("数据表阈值清理————处理表: {},  异常信息: {}", tableName, e.getMessage());
                     log.info("————————————————————————————————————————————————————————————————————————————————————————————————————————");
@@ -517,42 +617,126 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
         List<ShowPartitionResult> partitions = new ArrayList<>();
         String sql = "SHOW PARTITIONS FROM " + dbName + "." + tableName + " ORDER BY PartitionName ASC";
 
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+//        Connection connection = null;
+//        PreparedStatement statement = null;
+//        ResultSet resultSet = null;
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet resultSet = statement.executeQuery();) {
+//            connection = pool.getConnection(hostname + port + databaseName);
+//            statement = connection.prepareStatement(sql);
+//            resultSet = statement.executeQuery();
+            while (resultSet.next()) {
+                ShowPartitionResult partition = ShowPartitionResult.builder()
+                        .partitionId(resultSet.getLong("PartitionId"))
+                        .partitionName(resultSet.getString("PartitionName"))
+                        .visibleVersion(resultSet.getInt("VisibleVersion"))
+                        .visibleVersionTime(resultSet.getString("VisibleVersionTime"))
+                        .state(resultSet.getString("State"))
+                        .partitionKey(resultSet.getString("PartitionKey"))
+                        .range(resultSet.getString("Range"))
+                        .distributionKey(resultSet.getString("DistributionKey"))
+                        .buckets(resultSet.getInt("Buckets"))
+                        .replicationNum(resultSet.getInt("ReplicationNum"))
+                        .storageMedium(resultSet.getString("StorageMedium"))
+                        .cooldownTime(resultSet.getString("CooldownTime"))
+                        .remoteStoragePolicy(resultSet.getString("RemoteStoragePolicy"))
+                        .lastConsistencyCheckTime(resultSet.getString("LastConsistencyCheckTime"))
+                        .dataSize(resultSet.getString("DataSize"))
+                        .isInMemory(resultSet.getBoolean("IsInMemory"))
+                        .replicaAllocation(resultSet.getString("ReplicaAllocation"))
+                        .isMutable(resultSet.getBoolean("IsMutable"))
+                        .syncWithBaseTables(resultSet.getBoolean("SyncWithBaseTables"))
+                        .unsyncTables(resultSet.getString("UnsyncTables"))
+                        .build();
 
-            try (ResultSet resultSet = statement.executeQuery()) {
-                while (resultSet.next()) {
-                    ShowPartitionResult partition = ShowPartitionResult.builder()
-                            .partitionId(resultSet.getLong("PartitionId"))
-                            .partitionName(resultSet.getString("PartitionName"))
-                            .visibleVersion(resultSet.getInt("VisibleVersion"))
-                            .visibleVersionTime(resultSet.getString("VisibleVersionTime"))
-                            .state(resultSet.getString("State"))
-                            .partitionKey(resultSet.getString("PartitionKey"))
-                            .range(resultSet.getString("Range"))
-                            .distributionKey(resultSet.getString("DistributionKey"))
-                            .buckets(resultSet.getInt("Buckets"))
-                            .replicationNum(resultSet.getInt("ReplicationNum"))
-                            .storageMedium(resultSet.getString("StorageMedium"))
-                            .cooldownTime(resultSet.getString("CooldownTime"))
-                            .remoteStoragePolicy(resultSet.getString("RemoteStoragePolicy"))
-                            .lastConsistencyCheckTime(resultSet.getString("LastConsistencyCheckTime"))
-                            .dataSize(resultSet.getString("DataSize"))
-                            .isInMemory(resultSet.getBoolean("IsInMemory"))
-                            .replicaAllocation(resultSet.getString("ReplicaAllocation"))
-                            .isMutable(resultSet.getBoolean("IsMutable"))
-                            .syncWithBaseTables(resultSet.getBoolean("SyncWithBaseTables"))
-                            .unsyncTables(resultSet.getString("UnsyncTables"))
-                            .build();
-
-                    partitions.add(partition);
-                }
+                partitions.add(partition);
             }
         } catch (SQLException e) {
-            log.error("数据表阈值清理————表名: {} ,showPartitions异常信息: {}",tableName, e.getMessage());
+            log.error("数据表阈值清理————表名: {} ,showPartitions异常信息: {}", tableName, e.getMessage());
         }
 
         return partitions;
+    }
+
+    @Override
+    public String getQueryIDList(String databaseName, String likeSql) {
+        return "";
+    }
+
+    @Override
+    public List<ProcessListPojo> getProcessList(ProcessListPojo processListPojo) {
+        List<ProcessListPojo> processListPojoList = new ArrayList<>();
+
+        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder();
+        sqlQueryBuilder.tableName("PROCESSLIST").dbName("information_schema");
+        sqlQueryBuilder
+                .addAndCondition("CURRENT_CONNECTED", SQLOperatorEnum.EQUAL, processListPojo.getCurrentConnected())
+                .addAndCondition("ID", SQLOperatorEnum.EQUAL, processListPojo.getId())
+                .addAndCondition("USER", SQLOperatorEnum.EQUAL, processListPojo.getUser())
+                .addAndCondition("HOST", SQLOperatorEnum.EQUAL, processListPojo.getHost())
+                .addAndCondition("LOGIN_TIME", SQLOperatorEnum.EQUAL, processListPojo.getLoginTime())
+                .addAndCondition("CATALOG", SQLOperatorEnum.EQUAL, processListPojo.getCatalog())
+                .addAndCondition("DB", SQLOperatorEnum.EQUAL, processListPojo.getDb())
+                .addAndCondition("COMMAND", SQLOperatorEnum.EQUAL, processListPojo.getCommand())
+                .addAndCondition("TIME", SQLOperatorEnum.EQUAL, processListPojo.getTime())
+                .addAndCondition("STATE", SQLOperatorEnum.EQUAL, processListPojo.getState())
+                .addAndCondition("QUERY_ID", SQLOperatorEnum.EQUAL, processListPojo.getQueryId())
+                .addAndCondition("INFO", SQLOperatorEnum.EQUAL, processListPojo.getInfo())
+                .addAndCondition("FE", SQLOperatorEnum.EQUAL, processListPojo.getFe())
+                .addAndCondition("CLOUD_CLUSTER", SQLOperatorEnum.EQUAL, processListPojo.getCloudCluster());
+        String sql = sqlQueryBuilder.buildSQL();
+
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet resultSet = statement.executeQuery();) {
+            while (resultSet.next()) {
+                ProcessListPojo build = ProcessListPojo.builder()
+                        .currentConnected(resultSet.getString("CURRENT_CONNECTED"))
+                        .id(resultSet.getLong("ID"))
+                        .user(resultSet.getString("USER"))
+                        .host(resultSet.getString("HOST"))
+                        .loginTime(resultSet.getString("LOGIN_TIME"))
+                        .catalog(resultSet.getString("CATALOG"))
+                        .db(resultSet.getString("DB"))
+                        .command(resultSet.getString("COMMAND"))
+                        .time(resultSet.getInt("TIME"))
+                        .state(resultSet.getString("STATE"))
+                        .queryId(resultSet.getString("QUERY_ID"))
+                        .info(resultSet.getString("INFO"))
+                        .fe(resultSet.getString("FE"))
+                        .cloudCluster(resultSet.getString("CLOUD_CLUSTER"))
+                        .build();
+                processListPojoList.add(build);
+            }
+        } catch (SQLException e) {
+            log.error("获取进程列表失败，异常信息: {}", e.getMessage());
+        }
+        return processListPojoList;
+    }
+
+    @Override
+    public boolean killQuery(String queryId) {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
+             PreparedStatement statement = connection.prepareStatement("KILL QUERY '" + queryId + "';");) {
+            boolean b = statement.execute();
+            return b;
+        } catch (SQLException e) {
+            log.error("删除查询任务失败，异常信息: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public boolean killConnection(Integer connectionId) {
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
+             PreparedStatement statement = connection.prepareStatement("KILL CONNECTION " + connectionId );) {
+            boolean b = statement.execute();
+            return b;
+        } catch (SQLException e) {
+            log.error("杀死连接失败，异常信息: {}", e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -602,11 +786,39 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
         for (int i = 0; i < batch; i++) {
             List<?> subList = list.subList(start, start + size);
             StreamLoadResult streamLoadResult = streamLoad(listToJson(subList), tableName, columns, importFileType);
+            if (streamLoadResult == null) {
+                continue;
+            }
             results[i] = streamLoadResult;
             start += size;
         }
         if (remainder > 0) {
             List<?> subList = list.subList(start, start + remainder);
+            StreamLoadResult streamLoadResult = streamLoad(listToJson(subList), tableName, columns, importFileType);
+            results[batch] = streamLoadResult;
+        }
+
+        return results;
+    }
+
+    public StreamLoadResult[] streamLoadBatch(JSONArray jsonArray, String tableName, int size, String columns, FileTypeEnum importFileType) throws IOException {
+        int total = jsonArray.size();
+        if (jsonArray == null || total == 0) {
+            return new StreamLoadResult[0];
+        }
+
+        int batch = total / size;
+        StreamLoadResult[] results = new StreamLoadResult[batch + 1];
+        int remainder = total % size;
+        int start = 0;
+        for (int i = 0; i < batch; i++) {
+            List<?> subList = jsonArray.subList(start, start + size);
+            StreamLoadResult streamLoadResult = streamLoad(listToJson(subList), tableName, columns, importFileType);
+            results[i] = streamLoadResult;
+            start += size;
+        }
+        if (remainder > 0) {
+            List<?> subList = jsonArray.subList(start, start + remainder);
             StreamLoadResult streamLoadResult = streamLoad(listToJson(subList), tableName, columns, importFileType);
             results[batch] = streamLoadResult;
         }
@@ -621,10 +833,8 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
 
     @Override
     public Object instantiate(String databaseName, String tableName) {
-        try {
-            DatabaseMetaData metaData = pool.getConnection(hostname + port + databaseName).getMetaData();
-            ResultSet resultSet = metaData.getColumns(databaseName, null, tableName, null);
-
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
+             ResultSet resultSet = connection.getMetaData().getColumns(databaseName, null, tableName, null)) {
             // 创建ByteBuddy对象
             ByteBuddy byteBuddy = new ByteBuddy();
 
@@ -673,6 +883,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
             }
 
             return loadedClass.getDeclaredConstructor().newInstance(); // 使用无参构造器实例化
+
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -680,7 +891,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
 
     @Override
     public void aSynExport(String dbName, String tableName, String where, String path, String columns, String jobId) {
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
              Statement statement = connection.createStatement()) {
             StringBuilder sql = new StringBuilder("EXPORT TABLE " + dbName + "." + tableName + " \n");
             if (StringUtils.isNotBlank(where)) {
@@ -712,7 +923,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
     @Override
     public ShowExport queryASynExportJobStatus(String dbName, String label) {
         //查询结果封装成ShowExport类
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
              Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery("SHOW EXPORT FROM " + dbName + " WHERE LABEL like '%" + label + "%'");) {
             while (resultSet.next()) {
@@ -752,7 +963,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
     public List<ShowExport> queryASynExportJobStatus(String dbName) {
         List<ShowExport> showExports = new ArrayList<>();
         //查询结果封装成ShowExport类
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
              Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery("SHOW EXPORT FROM " + dbName)) {
             while (resultSet.next()) {
@@ -790,7 +1001,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
 
     @Override
     public void stopASynExportJob(String jobId) {
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
              Statement statement = connection.createStatement()) {
             String sql = "CANCEL EXPORT FROM tpch1 WHERE LABEL like \"%" + jobId + "%\";";
             statement.execute(sql);
@@ -801,12 +1012,21 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
 
     @Override
     public IntoOutFile synExport(String sql, String path, String maximumFileSize, FileTypeEnum fileTypeEnum) {
+        // 使用正则表达式来处理嵌套的 SELECT 语句
+        Pattern pattern = Pattern.compile("(?i)^\\s*(\\(*\\s*)select(\\s+)");
+        Matcher matcher = pattern.matcher(sql);
+
         StringBuilder SQLBuilder = new StringBuilder();
-        //是否开头是以select开头的
-        if (sql.toLowerCase().startsWith("select")) {
-            SQLBuilder.append("SELECT /*+ SET_VAR(query_timeout = 300, enable_partition_cache=false) */ " + sql.substring(6));
+
+        if (matcher.find()) {
+            String matched = matcher.group(1); // 获取匹配的左括号部分
+            int leftParenthesesCount = matched.length() - matched.replace("(", "").length(); // 计算左括号数量
+            String replacement = "SELECT /*+ SET_VAR(query_timeout = 300) */ ";
+
+            // 根据左括号数量构造新的 SQL 语句
+            SQLBuilder.append("(".repeat(leftParenthesesCount)).append(replacement).append(sql.substring(matcher.end())); // 使用repeat来重复左括号
         } else {
-            SQLBuilder.append(sql.replace("select", "SELECT /*+ SET_VAR(query_timeout = 300, enable_partition_cache=false) */ "));
+            throw new ServiceException();
         }
 
         SQLBuilder.append(" INTO OUTFILE \"file://").append(path + "\"\n")
@@ -821,7 +1041,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
         SQLBuilder.append("\"max_file_size\" = \"" + maximumFileSize + "\",\n")
                 .append("\"with_bom\" = \"true\"\n")
                 .append(");");
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
              Statement statement = connection.createStatement();
              ResultSet resultSet = statement.executeQuery(SQLBuilder.toString())) {
             while (resultSet.next()) {
@@ -850,10 +1070,10 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
     @Override
     public ShowCreateTable getCreateTableDDL(String dbName, String table) {
         //通过语句查FE
-        try (Connection connection = pool.getConnection(hostname + port + databaseName);
-             Statement statement = connection.createStatement()) {
-            String sql = "SHOW CREATE TABLE " + dbName + "." + table + ";";
-            ResultSet resultSet = statement.executeQuery(sql);
+        String sql = "SHOW CREATE TABLE " + dbName + "." + table + ";";
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser);
+             Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery(sql)) {
             while (resultSet.next()) {
                 String createTableDDL = resultSet.getString("Create Table");
                 String tableCur = resultSet.getString("Table");
@@ -867,6 +1087,80 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
             throw new RuntimeException(e);
         }
         return null;
+    }
+
+    /**
+     * @param sql
+     * @param handler
+     * @return
+     * @throws Exception
+     */
+    @Override
+    public <T> T queryStreamADBC(String sql, ADBCQueryResultHandler<T> handler) throws Exception {
+        T result = null;
+        try (AdbcDatabase adbcDatabase = this.driver.open(parameters);
+             AdbcConnection connection = adbcDatabase.connect();
+             AdbcStatement stmt = connection.createStatement()) {
+
+            stmt.setSqlQuery(sql);
+            AdbcStatement.QueryResult queryResult = stmt.executeQuery();
+            ArrowReader reader = queryResult.getReader();
+
+            List<Map<String, Object>> batchResults = new ArrayList<>();
+            while (reader.loadNextBatch()) {
+                VectorSchemaRoot root = reader.getVectorSchemaRoot();
+                List<FieldVector> fieldVectors = root.getFieldVectors();
+
+                // 构造批次数据
+                for (int i = 0; i < root.getRowCount(); i++) {
+                    Map<String, Object> row = new HashMap<>();
+                    for (FieldVector fieldVector : fieldVectors) {
+                        row.put(fieldVector.getField().getName(), fieldVector.getObject(i));
+                    }
+                    batchResults.add(row);
+                }
+
+                // 调用回调处理器
+                result = handler.handle(batchResults);
+                batchResults.clear(); // 清空批次数据
+            }
+
+            reader.close();
+            queryResult.close();
+            adbcDatabase.close();
+        }
+
+        return result;
+    }
+
+
+    @Override
+    public <T> T jdbcConnectWithArrowFlightSQL(String sql, ResultSetHandler<T> handler) throws Exception {
+        T result = null;
+        Class.forName("org.apache.arrow.driver.jdbc.ArrowFlightJdbcDriver");
+        String DB_URL = "jdbc:arrow-flight-sql://" + hostname + ":" + DORIS_ADBC_FE_PORT
+                + "?useServerPrepStmts=false&cachePrepStmts=true&useSSL=false&useEncryption=false";
+        String USER = username;
+        String PASS = password;
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS);
+             Statement stmt = conn.createStatement();
+             ResultSet resultSet = stmt.executeQuery(sql)) {
+
+            // 直接调用 handler 处理整个 ResultSet
+            result = handler.handle(resultSet);
+        }
+
+        return result; // 返回处理后的结果
+    }
+
+    /**
+     * <h1>在Doris中已经废弃，因为Doris不支持JDBC的方式进行流批式查询</h1>
+     */
+    @Deprecated
+    @Override
+    public <T> T queryStream(String sql, ResultSetHandler<T> handler, Integer size) throws SQLException {
+        return super.queryStream(sql, handler, size);
     }
 
     private static class FieldSettingImplementation implements Implementation {
@@ -889,7 +1183,7 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
                                 }
 
                                 @Override
-                                public Size apply(MethodVisitor methodVisitor, Context implementationContext) {
+                                public Size apply(MethodVisitor methodVisitor, Implementation.Context implementationContext) {
                                     for (int i = 0; i < fieldNames.size(); i++) {
                                         methodVisitor.visitVarInsn(Opcodes.ALOAD, 0); // 加载this
 
@@ -983,22 +1277,343 @@ public class DorisJDBCAdapter extends JDBCAdapter implements
                 s.substring(1).toLowerCase();
     }
 
+    /**
+     * 添加随机采样
+     * <h1>不允许出现 ORDER BY、 LIMIT等字眼</h1>
+     *
+     * @param sqlQueryMontage
+     * @return 增加随机抽样后的SQL
+     */
+    @Override
+    public List<String> addRandomSampling(SQLQueryMontage sqlQueryMontage, int N, int M) {
+        SampleResult sampleResult = sqlQueryMontage.getSampleResult();
+        sampleResult.setSample_result("增量");
+        sampleResult.setSample_time(LocalDateTime.now());
+
+        SQLQueryBuilder sqlQueryBuilder = sqlQueryMontage.getSqlQueryBuilders().get(0);
+        String sql = sqlQueryBuilder.buildSQL();
+        List<String> list = new ArrayList<>();
+        if (StringUtils.isBlank(sql)) {
+            throw exception(RANDOM_SAMPLING_ERROR);
+        }
+        Matcher matcher = RandomSamplingCompile.matcher(sql);
+        if (matcher.find()) {
+            throw exception(RANDOM_SAMPLING_NOT_ALLOW_KEYWORD);
+        }
+        //首先获取总量
+        String countSql = sql.replaceAll("(?i)SELECT\\s+.*?\\s+FROM", "SELECT COUNT(1) FROM").replaceAll("order by.+", ")");
+
+        List<Map<String, Object>> countResult = null;
+        try {
+            countResult = executeDMLC(countSql, null);
+            long totalCount = countResult.isEmpty() ? 0 : (Long) countResult.get(0).get("count(1)");
+            // 验证抽样点和前后记录分布一定要小于表的总记录数
+            if (N <= 0 || totalCount == 0 || M <= 0) {
+                sampleResult.setSample_count(0);
+                return list; // 无效参数直接返回
+            }
+
+            if (totalCount < M) {
+                list.add(sql);
+                sampleResult.setSample_count(totalCount);
+                return list;
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+//            throw new RuntimeException(e);
+            return list;
+        }
+
+        String randomSampling = ") LIMIT " + M;
+        if (sql.contains("order by")) {
+            sql = sql.replaceAll("order by.+", randomSampling);
+        } else {
+            sql = sql.substring(0, sql.length() - 1) + randomSampling;
+        }
+        list.add(sql);
+        return list;
+    }
+
+    /**
+     * 获取索引
+     *
+     * @param dbName    数据库
+     * @param tableName 数据表
+     * @return 索引
+     */
+    @Override
+    public Map<String, Map<String, Object>> getIndexInfo(Connection connection, String dbName, String tableName) {
+        Map<String, Map<String, Object>> indexInfoList = new HashMap<>();
+        try (ResultSet indexInfo = connection.getMetaData().getIndexInfo(null, dbName, tableName, false, false);) {
+
+            while (indexInfo.next()) {
+                Map<String, Object> indexDetails = new HashMap<>();
+                String COLUMN_NAME = indexInfo.getString("COLUMN_NAME");
+                String indexType = indexInfo.getString("TYPE");
+                indexDetails.put("INDEX_TYPE", indexType);
+                indexDetails.put("INDEX_NAME", indexInfo.getString("INDEX_NAME"));
+                indexDetails.put("COLUMN_NAME", COLUMN_NAME);
+                indexDetails.put("IS_UNIQUE", !indexInfo.getBoolean("NON_UNIQUE"));
+
+                indexInfoList.put(COLUMN_NAME, indexDetails);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw exception(INDEX_INFO_GET_ERROR);
+        }
+
+        if (indexInfoList.isEmpty()) {
+            throw exception(INDEX_INFO_GET_ERROR);
+        }
+        return indexInfoList;
+    }
+
+    /**
+     * 获取（除忽略数据库外的全部元数据）数据库元数据信息。
+     *
+     * @return 数据库实体列表，包含数据库中的表信息
+     * @throws SQLException 如果无法检索数据库元数据，将抛出异常
+     */
+    @Override
+    public List<DatabaseEntity> getDatabaseMetadata() {
+        return getDatabaseMetadata(null);
+    }
+
+    @Override
+    public List<DatabaseEntity> getDatabaseMetadata(String dbName) {
+        List<DatabaseEntity> databaseEntities = new ArrayList<>();
+        List<String> ignoreDatabases = getIgnoreDatabaseList(); // 获取需要忽略的数据库列表
+        try (Connection connection = pool.getConnection(hostname + port + databaseName, config, connectionUser)) {
+            DatabaseMetaData metaData = connection.getMetaData();
+            try (ResultSet catalogs = connection.getMetaData().getCatalogs()) {  // 使用 try-with-resources 确保 ResultSet 被关闭
+                while (catalogs.next()) {
+                    String databaseName = catalogs.getString("TABLE_CAT");
+                    // 如果数据库在忽略列表中，则跳过
+                    if (ignoreDatabases.contains(databaseName)) {
+                        continue;
+                    }
+                    if (StringUtils.isNotBlank(dbName) && !dbName.equals(databaseName)) {
+                        continue;
+                    }
+                    DatabaseEntity databaseEntity = new DatabaseEntity();
+                    databaseEntity.setDatabaseName(databaseName);
+                    // 存入DatabaseType
+                    databaseEntity.setDatabaseEnum(getDatabaseType());
+                    Map<String, TableEntity> tableEntities = new HashMap<>();
+                    try (PreparedStatement preparedStatement = connection.prepareStatement("USE " + databaseName);
+                         ResultSet tables = metaData.getTables(databaseName, null, "%", new String[]{"TABLE"})) {  // 使用 try-with-resources 确保 ResultSet 被关闭
+                        preparedStatement.execute();
+                        while (tables.next()) {
+                            String tableName = tables.getString("TABLE_NAME");
+                            //TODO 跳过所有物化视图不加载
+                            if (tableName.contains("materialized_view")){
+                                continue;
+                            }
+                            //TODO 查索引
+                            Map<String, Map<String, Object>> indexInfo = getIndexInfo(connection, databaseName, tableName);
+
+                            TableEntity tableEntity = new TableEntity();
+                            tableEntity.setTableName(tableName);
+                            tableEntity.setTableComment(tables.getString("REMARKS")); // 获取表注释
+                            Map<String, ColumnEntity> columnEntities = new HashMap<>();
+                            try (ResultSet cols = metaData.getColumns(databaseName, null, tableName, "%")) {  // 使用 try-with-resources 确保 ResultSet 被关闭
+                                while (cols.next()) {
+                                    ColumnEntity columnEntity = new ColumnEntity();
+                                    String TYPE_NAME = cols.getString("TYPE_NAME");
+                                    columnEntity.setColumnName(cols.getString("COLUMN_NAME")); // 获取列名
+                                    columnEntity.setColumnType(TYPE_NAME); // 获取列类型
+                                    columnEntity.setColumnSize(cols.getInt("COLUMN_SIZE")); // 获取列大小
+                                    columnEntity.setNullable(cols.getInt("NULLABLE") == DatabaseMetaData.columnNullable); // 获取可否为NULL
+                                    columnEntity.setDefaultValue(cols.getString("COLUMN_DEF")); // 获取默认值
+                                    columnEntity.setAutoIncrement("YES".equals(cols.getString("IS_AUTOINCREMENT")) ? 1 : 0); // 获取自增状态
+                                    columnEntity.setColumnComment(cols.getString("REMARKS")); // 获取列注释
+
+                                    // 判断是什么类型的TYPE_NAME
+                                    columnEntity.setType(getColumnType(TYPE_NAME));
+
+                                    //TODO 是否是索引
+                                    if (indexInfo.containsKey(cols.getString("COLUMN_NAME"))) {
+                                        columnEntity.setIsIndex(1);
+                                    }
+
+                                    columnEntities.put(columnEntity.getColumnName(), columnEntity);
+                                }
+                            } catch (SQLException e) {
+                                e.printStackTrace();
+                                throw exception(UNABLE_TO_RETRIEVE_DATABASE_METADATA); // 抛出无法检索数据库元数据的异常
+                            }
+                            tableEntity.setColumns(columnEntities); // 设置表的列信息
+                            tableEntities.put(tableName, tableEntity);
+                        }
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                        throw exception(UNABLE_TO_RETRIEVE_DATABASE_METADATA); // 抛出无法检索数据库元数据的异常
+                    }
+                    databaseEntity.setTables(tableEntities); // 设置数据库中的表信息
+                    databaseEntities.add(databaseEntity);
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+                throw exception(UNABLE_TO_RETRIEVE_DATABASE_METADATA); // 抛出无法检索数据库元数据的异常
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw exception(UNABLE_TO_RETRIEVE_DATABASE_METADATA); // 抛出无法检索数据库元数据的异常
+        }
+        return databaseEntities; // 返回数据库实体列表
+    }
+
+    /**
+     * 1字符串 2数字 0时间
+     * <p>
+     * 判断输入的字符串名称是什么类型的数据字段
+     */
+    public int getColumnType(String columnType) {
+        switch (columnType) {
+            case "CHAR":
+            case "VARCHAR":
+            case "STRING":
+                return 1;
+            case "BIGINT":
+            case "INT":
+            case "LARGEINT":
+                return 2;
+            case "DATE":
+            case "DATETIME":
+                return 0;
+            default:
+                return 3;
+        }
+    }
+
     public static void main(String[] args) throws IllegalAccessException, InstantiationException, ClassNotFoundException {
         JDBCConnectionEntity root = new JDBCConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "bds_log", "root", "123456aA!@");
 
         DorisJDBCAdapter adapter = DatabaseAdapterFactory.getAdapter(root, DorisJDBCAdapter.class);
 
-        List<String> DBNames = new ArrayList<>();
-        DBNames.add("bds_log");
-        List<String> tableNames = new ArrayList<>();
-        tableNames.add("bds_asset_info");
-        List<Double> limitSizes = new ArrayList<>();
-        limitSizes.add(0.002);
-        List<String> sortTimeFields = new ArrayList<>();
-        sortTimeFields.add("create_time");
-        double threshold = 0.9;
-        boolean b = adapter.determineCleaningBasedOnPartitionDataTableThreshold(DBNames, tableNames, limitSizes, sortTimeFields, threshold);
-        System.out.println(b);
-//        Object instantiate = adapter.instantiate("bds_log", "bds_asset_info");
+//        List<String> sampledData = adapter.N_point_sampling_method("SELECT * FROM bds_asset_info", 10, 10);
+//        List<DatabaseEntity> databaseMetadata = adapter.getDatabaseMetadata();
+//        System.out.println(databaseMetadata);
+//        Map<String, Map<String, Object>> indexInfo = adapter.getIndexInfo("bds_log", "bds_asset_info");
+//        System.out.println(indexInfo);
+//        String s = adapter.addRandomSampling("SELECT * FROM bds_asset_info",500);
+//        System.out.println(s);
+
+        //ADBC
+        final AtomicInteger[] atomicInteger = {new AtomicInteger()};
+        final int[] j = {0};
+        long start = System.currentTimeMillis();
+
+
+//        try {
+//            adapter.queryStreamADBC("select * from bds_log.bds_wangc_log;", new ADBCQueryResultHandler<Object>() {
+//                @Override
+//                public Object handle(List<Map<String, Object>> batch) throws Exception {
+//                    j[0]+=batch.size();
+//                    if (j[0]%406400==0){
+//                        System.out.println(j[0]);
+//                    }
+//                    return null;
+//                }
+//            });
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+//        System.out.println(j[0]);
+
+//        List<Map<String, Object>> results;
+//        try {
+////            results = adapter.jdbcConnectWithArrowFlightSQL("select * from bds_log.bds_asset_info;", new CustomResultSetHandler());
+//            adapter.jdbcConnectWithArrowFlightSQL("select * from bds_log.bds_asset_info;", new ResultSetHandler() {
+//                @Override
+//                public Object handle(ResultSet resultSet) throws SQLException {
+//                    do {
+//                    } while (resultSet.next());
+//                    return null;
+//                }
+//            });
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+//        System.out.println(j[0]);
+
+
+//        Class.forName("org.apache.arrow.driver.jdbc.ArrowFlightJdbcDriver");
+//        String DB_URL = "jdbc:arrow-flight-sql://192.168.10.202:8815?useServerPrepStmts=false"
+//                + "&cachePrepStmts=true&useSSL=false&useEncryption=false";
+//        String USER = "root";
+//        String PASS = "123456aA!@";
+//
+//        try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS);
+//             Statement stmt = conn.createStatement();
+//             ResultSet resultSet = stmt.executeQuery("select * from bds_log.bds_wangc_log");) {
+//            while (resultSet.next()) {
+//                j[0]++;
+//                if (j[0]%1000000==0){
+//                    System.out.println(j[0]);
+//                }
+//            }
+//        } catch (SQLException e) {
+//            throw new RuntimeException(e);
+//        }
+//        System.out.println(j[0]);
+
+        System.out.println("最后时间:" + (System.currentTimeMillis() - start) / 1000);
+
+//        LocalDateTime now = LocalDateTime.now();
+//        //转换成 正常的DateTime格式
+//        String format = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+//
+//        ProcessListPojo processListPojo = new ProcessListPojo("1", 2L,"3","4",LocalDateTime.now(), "5", "6", "7", 8,"9","10","11","12","13");
+//        SQLQueryBuilder sqlQueryBuilder = new SQLQueryBuilder();
+//        sqlQueryBuilder.dbName("information_schema")
+//                .tableName("PROCESSLIST")
+//                .addAndCondition("CURRENT_CONNECTED", SQLOperatorEnum.EQUAL, processListPojo.getCurrentConnected())
+//                .addAndCondition("ID", SQLOperatorEnum.EQUAL, processListPojo.getId())
+//                .addAndCondition("USER", SQLOperatorEnum.EQUAL, processListPojo.getUser())
+//                .addAndCondition("HOST", SQLOperatorEnum.EQUAL, processListPojo.getHost())
+//                .addAndCondition("LOGIN_TIME", SQLOperatorEnum.EQUAL, processListPojo.getLoginTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
+//                .addAndCondition("CATALOG", SQLOperatorEnum.EQUAL, processListPojo.getCatalog())
+//                .addAndCondition("DB", SQLOperatorEnum.EQUAL, processListPojo.getDb())
+//                .addAndCondition("COMMAND", SQLOperatorEnum.EQUAL, processListPojo.getCommand())
+//                .addAndCondition("TIME", SQLOperatorEnum.EQUAL, processListPojo.getTime())
+//                .addAndCondition("STATE", SQLOperatorEnum.EQUAL, processListPojo.getState())
+//                .addAndCondition("QUERY_ID", SQLOperatorEnum.EQUAL, processListPojo.getQueryId())
+//                .addAndCondition("INFO", SQLOperatorEnum.EQUAL, processListPojo.getInfo())
+//                .addAndCondition("FE", SQLOperatorEnum.EQUAL, processListPojo.getFe())
+//                .addAndCondition("CLOUD_CLUSTER", SQLOperatorEnum.EQUAL, processListPojo.getCloudCluster());
+//        String s = sqlQueryBuilder.buildSQL();
+//        System.out.println(s);
+
+        String tableName = "bds_fortress_log";
+        String dbName = "bds_log";
+        LocalDate endDate = LocalDate.of(2024, 8, 31); // 开始日期
+        int partitionCount = 180;
+
+        DateTimeFormatter partitionFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+        DateTimeFormatter valueFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        StringBuilder sqlBuilder = new StringBuilder();
+        for (int i = 0; i < partitionCount; i++) {
+            LocalDate partitionDate = endDate.minusDays(i); // 当前分区日期
+            LocalDate previousDate = partitionDate.minusDays(1); // 上一个分区的日期
+            String partitionName = "p" + partitionDate.format(partitionFormatter); // 分区名
+            String lessThanValue = partitionDate.format(valueFormatter); // 范围上限
+
+
+            try {
+                adapter.executeDDL(String.format(
+                        "ALTER TABLE %s.%s ADD PARTITION %s VALUES LESS THAN ('%s');\n",
+                        dbName, tableName, partitionName, lessThanValue
+                ), null);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+            partitionDate = previousDate;
+        }
+
+        System.out.println(sqlBuilder.toString());
     }
+
 }

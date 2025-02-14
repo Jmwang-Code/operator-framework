@@ -3,8 +3,8 @@ package com.cn.jmw.processor.datasource.export;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.factory.DatabaseAdapterFactory;
 import com.cn.jmw.processor.datasource.jdbc.adapter.DorisJDBCAdapter;
-import com.cn.jmw.processor.datasource.jdbc.adapter.pojo.ShowExport;
 import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;
+import com.cn.jmw.processor.datasource.pojo.ShowExport;
 import org.junit.Before;
 import org.junit.Test;
 

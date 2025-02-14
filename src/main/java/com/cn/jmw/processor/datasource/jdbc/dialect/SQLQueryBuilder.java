@@ -7,6 +7,7 @@ import com.cn.jmw.processor.datasource.jdbc.dialect.pojo.*;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.micrometer.common.util.StringUtils;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jooq.Record;
 import org.jooq.*;
 import org.jooq.conf.ParamType;
@@ -21,12 +22,16 @@ import java.util.stream.Collectors;
  * SQLQueryBuilder类用于构建SQL查询，包括选择、条件、连接和排序等功能。
  * 它使用构建者模式使得查询的构建变得灵活和可读。
  */
+@Slf4j
 @NoArgsConstructor
 public class SQLQueryBuilder {
     //SQL方言
     @JsonProperty("SQLDialect")
     private SQLDialect sqlDialect = SQLDialect.MYSQL;
     //数据库名称
+    @JsonProperty("dbName")
+    private String dbName;
+    //模式
     @JsonProperty("schemaName")
     private String schemaName;
     //表列表
@@ -40,7 +45,7 @@ public class SQLQueryBuilder {
     private List<QueryCondition> conditions = new ArrayList<>();
     //扩展String where
     @JsonProperty("stringConditions")
-    private List<String> stringConditions = new ArrayList<>();
+    private List<QueryStringCondition> stringConditions = new ArrayList<>();
     //级联
     @JsonProperty("joins")
     private List<QueryJoin> joins = new ArrayList<>();
@@ -52,7 +57,7 @@ public class SQLQueryBuilder {
     private List<QueryCondition> havingConditions = new ArrayList<>();
     //扩展String having字段条件
     @JsonProperty("stringHavingConditions")
-    private List<String> stringHavingConditions = new ArrayList<>();
+    private List<QueryStringCondition> stringHavingConditions = new ArrayList<>();
     //排序
     @JsonProperty("orders")
     private List<QueryOrderBy> orders = new ArrayList<>();
@@ -161,6 +166,9 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addCondition(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum operatorEnum) {
+        if (isNullAndLog(field, value)) {
+            return this;
+        }
         this.conditions.add(new QueryCondition(field, operator, value, operatorEnum));
         return this;
     }
@@ -174,7 +182,30 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addAndCondition(String field, SQLOperatorEnum operator, Object value) {
+        if (isNullAndLog(field, value)) {
+            return this;
+        }
         this.conditions.add(new QueryCondition(field, operator, value, SQLOperatorEnum.AND));
+        return this;
+    }
+
+    public SQLQueryBuilder addAndCondition(String tableName, String field, SQLOperatorEnum operator, Object value) {
+        if (isNullAndLog(field, value)) {
+            return this;
+        }
+        this.conditions.add(new QueryCondition(tableName, field, operator, value, SQLOperatorEnum.AND));
+        return this;
+    }
+
+    /**
+     * 向SQL查询构建器添加一个AND条件。
+     *
+     * @param field    字段名
+     * @param operator 操作符
+     * @return 当前SQLQueryBuilder实例，以支持方法链调用
+     */
+    public SQLQueryBuilder addAndCondition(String field, SQLOperatorEnum operator) {
+        this.conditions.add(new QueryCondition(field, operator, null, SQLOperatorEnum.AND));
         return this;
     }
 
@@ -187,7 +218,22 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addOrCondition(String field, SQLOperatorEnum operator, Object value) {
+        if (isNullAndLog(field, value)) {
+            return this;
+        }
         this.conditions.add(new QueryCondition(field, operator, value, SQLOperatorEnum.OR));
+        return this;
+    }
+
+    /**
+     * 向SQL查询构建器添加一个OR条件。
+     *
+     * @param field    字段名
+     * @param operator 操作符
+     * @return 当前SQLQueryBuilder实例，以支持方法链调用
+     */
+    public SQLQueryBuilder addOrCondition(String field, SQLOperatorEnum operator) {
+        this.conditions.add(new QueryCondition(field, operator, null, SQLOperatorEnum.OR));
         return this;
     }
 
@@ -213,7 +259,25 @@ public class SQLQueryBuilder {
      */
     public SQLQueryBuilder addStringCondition(String condition) {
         if (StringUtils.isNotBlank(condition)) {
-            this.stringConditions.add(condition);
+            QueryStringCondition queryCondition = new QueryStringCondition(condition, SQLOperatorEnum.AND);
+            this.stringConditions.add(queryCondition);
+        }
+        return this;
+    }
+
+    /**
+     * ============================================================
+     * <p>向SQL查询构建器添加字符串条件，切记如果使用"字符串"添加会丧失一定的安全度。
+     * </p>
+     * ============================================================
+     *
+     * @param condition 条件字符串
+     * @return 当前SQLQueryBuilder实例，以支持方法链调用
+     */
+    public SQLQueryBuilder addOrStringCondition(String condition) {
+        if (StringUtils.isNotBlank(condition)) {
+            QueryStringCondition queryCondition = new QueryStringCondition(condition, SQLOperatorEnum.OR);
+            this.stringConditions.add(queryCondition);
         }
         return this;
     }
@@ -330,11 +394,17 @@ public class SQLQueryBuilder {
     }
 
     public SQLQueryBuilder addHavingConditions(String field, SQLOperatorEnum operator, Object value) {
+        if (isNullAndLog(field, value)) {
+            return this;
+        }
         this.addHavingConditions(new QueryCondition(field, operator, value));
         return this;
     }
 
     public SQLQueryBuilder addHavingCondition(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum operatorEnum) {
+        if (isNullAndLog(field, value)) {
+            return this;
+        }
         this.addHavingConditions(new QueryCondition(field, operator, value, operatorEnum));
         return this;
     }
@@ -351,6 +421,9 @@ public class SQLQueryBuilder {
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
     public SQLQueryBuilder addHavingConditions(SQLFunctionEnum function, String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum joinOperator, List<Object> functionParams) {
+        if (isNullAndLog(field, value)) {
+            return this;
+        }
         this.addHavingConditions(new QueryCondition(function, field, operator, value, joinOperator, functionParams));
         return this;
     }
@@ -363,6 +436,19 @@ public class SQLQueryBuilder {
      */
     private SQLQueryBuilder addHavingConditions(QueryCondition havingConditions) {
         this.havingConditions.add(havingConditions);
+        return this;
+    }
+
+    /**
+     * 向SQLQueryBuilder添加排序条件。
+     *
+     * @param field   字段名
+     * @param order   排序方式（升序或降序）
+     * @param isAlias 是否为别名
+     * @return 当前SQLQueryBuilder实例，以支持方法链调用
+     */
+    public SQLQueryBuilder addOrder(String field, SQLOperatorEnum order, boolean isAlias) {
+        this.addOrder(new QueryOrderBy(field, order, isAlias));
         return this;
     }
 
@@ -483,13 +569,23 @@ public class SQLQueryBuilder {
      * @return 完整的表名
      */
     private String getFullTableName(List<Object> dataList) {
+        //如果存在子查询，那么直接返回子查询
         if (table != null && table.getSqlQueryBuilder() != null) {
             QuerySQLResult querySQLResult = table.getSqlQueryBuilder().buildQuerySQLResult();
             dataList.addAll(querySQLResult.getDataList());
 //            return table.getSqlQueryBuilder().buildSQL();
             return "(" + querySQLResult.getSql() + ")";
         }
-        return StringUtils.isNotBlank(schemaName) ? "`" + schemaName + "`.`" + table.getTable() + "`" : "`" + table.getTable() + "`";
+        //如果只存在dbName,那么就dbName.table，如果既存在dbName，又存在schemaName，那么就dbName.schemaName.table
+        if (StringUtils.isNotBlank(dbName) && StringUtils.isNotBlank(schemaName)) {
+            return "`" + dbName + "`.`" + schemaName + "`.`" + table.getTable() + "`";
+        } else if (StringUtils.isNotBlank(dbName) && StringUtils.isBlank(schemaName)) {
+            return "`" + dbName + "`.`" + table.getTable() + "`";
+        } else if (StringUtils.isBlank(dbName) && StringUtils.isBlank(schemaName)) {
+            return "`" + table.getTable() + "`";
+        } else {
+            throw new UnsupportedOperationException("当模式名称存在的时候，数据库名称不能为空。模式名称：" + schemaName + " 数据库名称：" + dbName);
+        }
     }
 
     /**
@@ -504,6 +600,18 @@ public class SQLQueryBuilder {
         return StringUtils.isNotBlank(table.getTableAlias()) ? table.getTableAlias() : table.getTable();
     }
 
+    private String getTableAliasOrName1(QueryField queryField) {
+        if (table == null) {
+            return null;
+        }
+        return StringUtils.isNotBlank(queryField.getTableName()) ?
+                queryField.getTableName() :
+                (StringUtils.isNotBlank(table.getTableAlias()) ?
+                        table.getTableAlias() :
+                        table.getTable());
+//        return StringUtils.isNotBlank(table.getTableAlias()) ? table.getTableAlias() : table.getTable();
+    }
+
     /**
      * 获取合格字段。
      *
@@ -516,7 +624,7 @@ public class SQLQueryBuilder {
         if (queryField.getFunction() != null) {
             field = DSL.field(queryField.getFunction().getFunction() + "(" + queryField.getFieldString() + ")");
         } else {
-            return queryField.toField(getTableAliasOrName());
+            return queryField.toField(getTableAliasOrName1(queryField));
         }
 
         // 检查并应用别名
@@ -566,30 +674,28 @@ public class SQLQueryBuilder {
         for (QueryJoin join : joins) {
             switch (join.getType()) {
                 case JOIN:
-                    query = query.join(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
+                    query = query.join(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 case INNER_JOIN:
-                    query = query.innerJoin(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
+                    query = query.innerJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 case LEFT_JOIN:
-                    query = query.leftJoin(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
+                    query = query.leftJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 case RIGHT_JOIN:
-                    query = query.rightJoin(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
+                    query = query.rightJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 case FULL_OUTER_JOIN:
-                    query = query.fullJoin(join.toTable(create,dataList)).on(DSL.condition(join.getOnCondition()));
+                    query = query.fullJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
                     break;
                 default:
                     throw new UnsupportedOperationException("不支持的联接类型: " + join.getType());
             }
         }
 
-        SelectJoinStep<Record> finalQuery = query;
-        stringConditions.forEach(condition -> finalQuery.where(DSL.condition(condition)));
         // 处理 conditions
+        Condition whereCondition = null;
         if (conditions != null && !conditions.isEmpty()) {
-            Condition whereCondition = null;
             for (QueryCondition condition : conditions) {
                 Condition currentCondition = condition.buildCondition(query, null, dataList);
                 //当前where中,第一次初始化
@@ -603,19 +709,33 @@ public class SQLQueryBuilder {
                     }
                 }
             }
-            // 将最终条件应用到 query
-            if (whereCondition != null) {
-                query.where(whereCondition);
+        }
+
+        if (stringConditions != null && !stringConditions.isEmpty()) {
+            for (QueryStringCondition condition : stringConditions) {
+                //当前where中,第一次初始化
+                if (whereCondition == null) {
+                    whereCondition = new QueryCondition().buildCondition(query, null, dataList);
+                }
+                if (condition.getOperator().equals(SQLOperatorEnum.AND)) {
+                    whereCondition = whereCondition.and(DSL.condition(condition.getCondition()));
+                } else if (condition.getOperator().equals(SQLOperatorEnum.OR)) {
+                    whereCondition = whereCondition.or(DSL.condition(condition.getCondition()));
+                }
             }
+        }
+
+        // 将最终条件应用到 query
+        if (whereCondition != null) {
+            query.where(whereCondition);
         }
 
         for (String group : groups) {
             query.groupBy(DSL.field(DSL.name(getTableAliasOrName(), group).quotedName()));
         }
 
-        stringHavingConditions.stream().map(condition -> finalQuery.having(DSL.condition(condition))).collect(Collectors.toList());
+        Condition havingCondition = null;
         if (havingConditions != null && !havingConditions.isEmpty()) {
-            Condition havingCondition = null;
             for (QueryCondition condition : havingConditions) {
                 if (havingCondition == null) {
                     havingCondition = condition.buildCondition(query, null, dataList);
@@ -625,6 +745,24 @@ public class SQLQueryBuilder {
                     havingCondition = havingCondition.and(condition.buildCondition(query, null, dataList));
                 }
             }
+
+        }
+
+        if (stringHavingConditions != null && !stringHavingConditions.isEmpty()) {
+            for (QueryStringCondition condition : stringHavingConditions) {
+                if (whereCondition == null) {
+                    whereCondition = new QueryCondition().buildCondition(query, null, dataList);
+                }
+                if (condition.getOperator().equals(SQLOperatorEnum.AND)) {
+                    havingCondition = havingCondition.and(DSL.condition(condition.getCondition()));
+                } else if (condition.getOperator().equals(SQLOperatorEnum.OR)) {
+                    havingCondition = havingCondition.or(DSL.condition(condition.getCondition()));
+                }
+            }
+        }
+
+        // 将最终条件应用到 query
+        if (havingCondition != null) {
             query.having(havingCondition);
         }
 
@@ -635,10 +773,18 @@ public class SQLQueryBuilder {
                 String field = queryOrderBy.getField();
                 switch (order) {
                     case ASC:
-                        sortFields.add(DSL.field(DSL.name(getTableAliasOrName(), field).quotedName()).asc());
+                        if (!queryOrderBy.isAlias()) {
+                            sortFields.add(DSL.field(DSL.name(field).quotedName()).asc());
+                        } else {
+                            sortFields.add(DSL.field(DSL.name(getTableAliasOrName(), field).quotedName()).asc());
+                        }
                         break;
                     case DESC:
-                        sortFields.add(DSL.field(DSL.name(getTableAliasOrName(), field).quotedName()).desc());
+                        if (!queryOrderBy.isAlias()) {
+                            sortFields.add(DSL.field(DSL.name(field).quotedName()).desc());
+                        } else {
+                            sortFields.add(DSL.field(DSL.name(getTableAliasOrName(), field).quotedName()).desc());
+                        }
                         break;
                     default:
                         throw new IllegalStateException("不支持的排序类型: " + order);
@@ -683,9 +829,9 @@ public class SQLQueryBuilder {
                     } else if (param instanceof String) {
                         if (param.toString().contains("'") && !param.toString().contains("\"")) {
                             return "\"" + param + "\"";
-                        }else if (param.toString().contains("\"") && !param.toString().contains("'")) {
+                        } else if (param.toString().contains("\"") && !param.toString().contains("'")) {
                             return "\'" + param + "\'";
-                        }else {
+                        } else {
                             //如果既包含单引号又包含双引号，则清空里面的双引号，加上单引号
                             return "\'" + ((String) param).replaceAll("\"", "") + "\'";
                         }
@@ -740,10 +886,42 @@ public class SQLQueryBuilder {
 
     public SQLQueryBuilder addStringHavingCondition(String havingCondition) {
         if (StringUtils.isNotBlank(havingCondition)) {
-            this.stringHavingConditions.add(havingCondition);
+            QueryStringCondition queryCondition = new QueryStringCondition(havingCondition, SQLOperatorEnum.AND);
+            this.stringHavingConditions.add(queryCondition);
         }
         return this;
     }
 
+    public SQLQueryBuilder addOrStringHavingCondition(String havingCondition) {
+        if (StringUtils.isNotBlank(havingCondition)) {
+            QueryStringCondition queryCondition = new QueryStringCondition(havingCondition, SQLOperatorEnum.OR);
+            this.stringHavingConditions.add(queryCondition);
+        }
+        return this;
+    }
 
+    public SQLQueryBuilder dbName(String dbName) {
+        this.dbName = dbName;
+        return this;
+    }
+
+    public SQLQueryBuilder schemaName(String schemaName) {
+        this.schemaName = schemaName;
+        return this;
+    }
+
+    /**
+     * 检查传入的值是否为null，并记录日志。
+     *
+     * @param key   用于日志展示的标识（例如字段名，或 "table.field"）
+     * @param value 条件值
+     * @return 如果值为null则返回true，否则返回false
+     */
+    private boolean isNullAndLog(String key, Object value) {
+        if (value == null || key == null) {
+            log.debug("跳过字段条件 '{}' 或 '{}'因为值为null。", key, value);
+            return true;
+        }
+        return false;
+    }
 }

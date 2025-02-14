@@ -1,8 +1,9 @@
 package com.cn.jmw.processor.datasource.pojo;
 
-import lombok.Data;
-
 import java.util.List;
+import java.util.Map;
+
+import lombok.Data;
 /**
  * TableEntity类用于表示数据库表的信息。
  * <p>
@@ -15,11 +16,16 @@ public class TableEntity {
      * 表名。
      */
     private String tableName;
+    /**
+     * 表注释
+     */
+    private String tableComment;
 
     /**
      * 列信息列表，这些列属于该表。
      *
      * @return List<ColumnEntity> 列对象的列表
      */
-    private List<ColumnEntity> columns;
+    private Map<String,ColumnEntity> columns;
+
 }

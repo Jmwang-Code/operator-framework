@@ -1,17 +1,24 @@
 package com.cn.jmw.processor.datasource.jdbc.adapter;
 
+import com.cn.jmw.pojo.SQLQueryMontage;
+import com.cn.jmw.pojo.SampleResult;
 import com.cn.jmw.processor.datasource.JDBCAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
+import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
 import com.cn.jmw.processor.datasource.pojo.ColumnEntity;
 import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
+import com.cn.jmw.processor.datasource.pojo.JDBCAdapterDataSourceConfig;
 import com.cn.jmw.processor.datasource.pojo.TableEntity;
+import com.clickhouse.data.value.UnsignedLong;
+import org.apache.arrow.adbc.core.AdbcException;
+import org.apache.commons.lang3.StringUtils;
 
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.regex.Matcher;
 
-import static com.cn.jmw.common.exception.enums.StructuredErrorCodeConstants.UNABLE_TO_RETRIEVE_DATABASE_METADATA;
+import static com.cn.jmw.common.exception.enums.StructuredErrorCodeConstants.*;
 import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
 
 /**
@@ -30,8 +37,16 @@ public class ClickHouseJDBCAdapter extends JDBCAdapter {
      * @param username     用户名
      * @param password     密码
      */
-    public ClickHouseJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password) {
-        super(hostname, port, databaseName, username, password);
+    public ClickHouseJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password, JDBCAdapterDataSourceConfig config, String connectionUser) {
+        super(hostname, port, databaseName, username, password,config,connectionUser);
+    }
+
+    public ClickHouseJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password,JDBCAdapterDataSourceConfig config) {
+        this(hostname, port, databaseName, username, password, config, null);
+    }
+
+    public ClickHouseJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password)  {
+        this(hostname, port, databaseName, username, password, new JDBCAdapterDataSourceConfig(), null);
     }
 
     /**
@@ -55,12 +70,68 @@ public class ClickHouseJDBCAdapter extends JDBCAdapter {
     }
 
     /**
+     * 添加随机采样
+     * <h1>不允许出现 ORDER BY、 LIMIT等字眼</h1>
+     *
+     * @param sqlQueryMontage
+     * @return 增加随机抽样后的SQL
+     */
+    @Override
+    public List<String> addRandomSampling(SQLQueryMontage sqlQueryMontage, int N, int M){
+        //抽样样本结果
+        SampleResult sampleResult = sqlQueryMontage.getSampleResult();
+        sampleResult.setSample_result("增量");
+        List<String> list = new ArrayList<>();
+        SQLQueryBuilder sqlQueryBuilder = sqlQueryMontage.getSqlQueryBuilders().get(0);
+        if (sqlQueryBuilder==null) {
+            throw exception(RANDOM_SAMPLING_ERROR);
+        }
+        String sql = sqlQueryBuilder.buildSQL();
+
+        //获取COUNT总量
+        //sql替换FROM之前的变成SELECT COUNT(1)
+        String countSql = sql.replaceAll("(?i)SELECT\\s+.*?\\s+FROM", "SELECT COUNT(1) FROM");
+        sampleResult.setSample_time(LocalDateTime.now());
+        //执行COUNT
+        List<Map<String, Object>> countResult = null;
+        try {
+            countResult = executeDMLC(countSql, null);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        long totalCount = countResult.isEmpty() ? 0 : Long.parseLong(((UnsignedLong)countResult.get(0).get("COUNT(1)")).toString());
+        // 验证抽样点和前后记录分布一定要小于表的总记录数
+        if (N <= 0 || totalCount == 0 || M <= 0) {
+            sampleResult.setSample_count(0);
+            return list; // 无效参数直接返回
+        }
+
+        if (totalCount < M) {
+            list.add(sql);
+            sampleResult.setSample_count(totalCount);
+            return list;
+        }
+        //totalCount和(N*M*2)的百分比
+        double percent = totalCount<(N * M * 2)?1.0:(N * M * 2) * 1.0 / totalCount;
+
+        String randomSampling = " SAMPLE "+percent;
+        sql = sql + randomSampling;
+        list.add(sql);
+        return list;
+    }
+
+    @Override
+    public List<DatabaseEntity> getDatabaseMetadata() {
+        return getDatabaseMetadata(null);
+    }
+
+    /**
      * 获取数据库元数据，包括所有数据库、表及其列的信息。
      *
      * @return 返回数据库实体列表，包含数据库及其表的详细信息
      */
     @Override
-    public List<DatabaseEntity> getDatabaseMetadata() {
+    public List<DatabaseEntity> getDatabaseMetadata(String dbName) {
         List<DatabaseEntity> databaseEntities = new ArrayList<>();
         List<String> ignoreDatabases = getIgnoreDatabaseList();
         try (Connection connection = DriverManager.getConnection(getConnectionString(), username, password)) {
@@ -72,21 +143,25 @@ public class ClickHouseJDBCAdapter extends JDBCAdapter {
                     if (ignoreDatabases.contains(databaseName)) {
                         continue;
                     }
+                    if (StringUtils.isNotBlank(dbName) && !databaseName.equals(dbName)) {
+                        continue;
+                    }
                     DatabaseEntity databaseEntity = new DatabaseEntity();
                     databaseEntity.setDatabaseName(databaseName);
                     databaseEntity.setDatabaseEnum(getDatabaseType());
-                    List<TableEntity> tableEntities = new ArrayList<>();
+                    Map<String,TableEntity> tableEntities = new HashMap<>();
                     // 获取指定数据库的所有表
-                    try (PreparedStatement psTables = connection.prepareStatement("SELECT name FROM system.tables WHERE database = ?")) {
+                    try (PreparedStatement psTables = connection.prepareStatement("SELECT name,comment FROM system.tables WHERE database = ?")) {
                         psTables.setString(1, databaseName);
                         ResultSet rsTables = psTables.executeQuery();
                         while (rsTables.next()) {
                             String tableName = rsTables.getString("name");
                             TableEntity tableEntity = new TableEntity();
                             tableEntity.setTableName(tableName);
-                            List<ColumnEntity> columnEntities = new ArrayList<>();
+                            tableEntity.setTableComment(rsTables.getString("comment")); // 获取表注释
+                            Map<String,ColumnEntity> columnEntities = new HashMap<>();
                             // 获取指定表的所有列
-                            try (PreparedStatement psColumns = connection.prepareStatement("SELECT name, type FROM system.columns WHERE database = ? AND table = ?")) {
+                            try (PreparedStatement psColumns = connection.prepareStatement("SELECT name, type,comment FROM system.columns WHERE database = ? AND table = ?")) {
                                 psColumns.setString(1, databaseName);
                                 psColumns.setString(2, tableName);
                                 ResultSet rsColumns = psColumns.executeQuery();
@@ -94,12 +169,13 @@ public class ClickHouseJDBCAdapter extends JDBCAdapter {
                                     ColumnEntity columnEntity = new ColumnEntity();
                                     columnEntity.setColumnName(rsColumns.getString("name"));
                                     columnEntity.setColumnType(rsColumns.getString("type"));
-                                    columnEntities.add(columnEntity);
+                                    columnEntity.setColumnComment(rsColumns.getString("comment")); // 获取字段注释
+                                    columnEntities.put(columnEntity.getColumnName(),columnEntity);
                                 }
                                 rsColumns.close();
                             }
                             tableEntity.setColumns(columnEntities);
-                            tableEntities.add(tableEntity);
+                            tableEntities.put(tableName,tableEntity);
                         }
                         rsTables.close();
                     }

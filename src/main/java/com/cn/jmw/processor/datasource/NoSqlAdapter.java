@@ -1,5 +1,16 @@
 package com.cn.jmw.processor.datasource;
 
+import com.cn.jmw.pojo.SQLQueryMontage;
+import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
+import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
+import com.cn.jmw.processor.datasource.nosql.query.NoSQLQuery;
+import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
+
+import java.util.List;
+
+import static com.cn.jmw.common.exception.enums.StructuredErrorCodeConstants.NOT_IMPLEMENTED_METHOD;
+import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
+
 /**
  * NoSqlAdapter是一个抽象类，用于定义与NoSQL数据库的适配器。
  * 该类扩展了Database类，并实现了NoSqlDatabaseQuery接口。
@@ -19,5 +30,50 @@ public abstract class NoSqlAdapter extends Database implements NoSqlDatabaseQuer
      */
     public NoSqlAdapter(String hostname, Integer port, String databaseName, String username, String password) {
         super(hostname, port, databaseName, username, password);
+    }
+
+    /**
+     * 给SQL字符串增加随机抽样
+     *
+     * @param sql
+     * @return 增加随机抽样后的SQL
+     */
+    public String addRandomSampling(String sql, long limit) {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    @Override
+    public boolean testConnection() {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    @Override
+    public List<DatabaseEntity> getDatabaseMetadata() {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    @Override
+    public String getDatabaseVersion() {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    @Override
+    public List<String> getIgnoreDatabaseList() {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    @Override
+    public List query(NoSQLQuery noSQLQuery) {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    @Override
+    public List<String> addRandomSampling(SQLQueryMontage sqlQueryMontage, int N, int M) {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
+    }
+
+    @Override
+    public List<String> N_point_sampling_method(SQLQueryMontage sqlQueryMontage, int N, int M) {
+        throw exception(NOT_IMPLEMENTED_METHOD); // 抛出未实现方法的异常
     }
 }

@@ -1,6 +1,7 @@
 package com.cn.jmw.processor.datasource.jdbc.dialect;
 
 import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.expression.Alias;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
@@ -15,6 +16,7 @@ import net.sf.jsqlparser.statement.update.Update;
 import org.junit.Test;
 
 import java.util.*;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertFalse;
 
@@ -85,14 +87,14 @@ public class SQLValidator {
     }
 
     private static boolean validateSelect(Select select) {
-        SelectBody selectBody = select.getSelectBody();
+        Select selectBody = select.getPlainSelect();
         if (selectBody instanceof PlainSelect) {
             // 对单个 PlainSelect 进行验证
             return validatePlainSelect((PlainSelect) selectBody);
         } else if (selectBody instanceof SetOperationList) {
             SetOperationList setOperationList = (SetOperationList) selectBody;
             // 对每个 PlainSelect 进行递归验证
-            for (SelectBody body : setOperationList.getSelects()) {
+            for (Select body : setOperationList.getSelects()) {
                 if (!validateSelectBody(body)) {
                     return false;
                 }
@@ -127,7 +129,7 @@ public class SQLValidator {
     }
 
     // 添加辅助方法，用于递归验证 SelectBody
-    private static boolean validateSelectBody(SelectBody selectBody) {
+    private static boolean validateSelectBody(Select selectBody) {
         if (selectBody instanceof PlainSelect) {
             return validatePlainSelect((PlainSelect) selectBody);
         } else if (selectBody instanceof SetOperationList) {
@@ -229,8 +231,8 @@ public class SQLValidator {
     }
 
     private static boolean validateSelectItem(SelectItem selectItem) {
-        if (selectItem instanceof SelectExpressionItem) {
-            return validateExpression(((SelectExpressionItem) selectItem).getExpression());
+        if (selectItem instanceof  SelectItem) {
+            return validateExpression((selectItem).getExpression());
         }
         return true;
     }

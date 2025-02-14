@@ -23,7 +23,6 @@ import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
  */
 public class JDBCDatabaseMetadataProcessor extends BaseProcessor<JDBCConnectionEntity, List<DatabaseEntity>> {
 
-
     @Override
     public List<DatabaseEntity> process(JDBCConnectionEntity input, Object... data) throws Exception {
         if (input == null) {

@@ -15,6 +15,7 @@ public class QueryOrderBy {
     private String field;
     // 排序的方式（如升序、降序）
     private SQLOperatorEnum order;
+    private boolean isAlias;
 
     /**
      * 构造一个 QueryOrderBy 实例
@@ -25,5 +26,17 @@ public class QueryOrderBy {
     public QueryOrderBy(String field, SQLOperatorEnum order) {
         this.field = field;
         this.order = order;
+    }
+
+    /**
+     * 构造一个 QueryOrderBy 实例
+     *
+     * @param field 排序字段的名称
+     * @param order 排序的方式（升序或降序）
+     */
+    public QueryOrderBy(String field, SQLOperatorEnum order, boolean isAlias) {
+        this.field = field;
+        this.order = order;
+        this.isAlias = isAlias;
     }
 }
