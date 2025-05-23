@@ -3,9 +3,9 @@ package com.cn.jmw.processor.datasource.createdb;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.enums.FileTypeEnum;
 import com.cn.jmw.processor.datasource.factory.DatabaseAdapterFactory;
-import com.cn.jmw.processor.datasource.jdbc.adapter.DorisJDBCAdapter;
-import com.cn.jmw.processor.datasource.jdbc.adapter.MySQLJDBCAdapter;
-import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;
+import com.cn.jmw.processor.datasource.jdbc.adapter.DorisJdbcAdapter;
+import com.cn.jmw.processor.datasource.jdbc.adapter.MySqlJdbcAdapter;
+import com.cn.jmw.processor.datasource.pojo.JdbcConnectionEntity;
 import com.cn.jmw.processor.datasource.pojo.StreamLoadResult;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
@@ -31,17 +31,17 @@ import java.util.stream.Collectors;
 
 public class CreateDB {
 
-    private DorisJDBCAdapter dorisJDBCAdapter;
+    private DorisJdbcAdapter dorisJDBCAdapter;
 
-    private MySQLJDBCAdapter mySQLJDBCAdapter;
+    private MySqlJdbcAdapter mySQLJDBCAdapter;
 
     @Before
     public void setUp() throws Exception {
-        JDBCConnectionEntity dorisJdbcConnectionEntity = new JDBCConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "test", "root", "123456aA!@");
-        dorisJDBCAdapter = DatabaseAdapterFactory.getAdapter(dorisJdbcConnectionEntity, DorisJDBCAdapter.class);
+        JdbcConnectionEntity dorisJdbcConnectionEntity = new JdbcConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "test", "root", "123456aA!@");
+        dorisJDBCAdapter = DatabaseAdapterFactory.getAdapter(dorisJdbcConnectionEntity, DorisJdbcAdapter.class);
 
-        JDBCConnectionEntity mysqlJdbcConnectionEntity = new JDBCConnectionEntity(DatabaseEnum.MYSQL, "192.168.10.222", 3306, "jt_bds", "root", "jt@2023!");
-        mySQLJDBCAdapter = DatabaseAdapterFactory.getAdapter(mysqlJdbcConnectionEntity, MySQLJDBCAdapter.class);
+        JdbcConnectionEntity mysqlJdbcConnectionEntity = new JdbcConnectionEntity(DatabaseEnum.MYSQL, "192.168.10.222", 3306, "jt_bds", "root", "jt@2023!");
+        mySQLJDBCAdapter = DatabaseAdapterFactory.getAdapter(mysqlJdbcConnectionEntity, MySqlJdbcAdapter.class);
     }
 
     /**

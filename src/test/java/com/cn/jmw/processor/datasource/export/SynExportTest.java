@@ -3,9 +3,9 @@ package com.cn.jmw.processor.datasource.export;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.enums.FileTypeEnum;
 import com.cn.jmw.processor.datasource.factory.DatabaseAdapterFactory;
-import com.cn.jmw.processor.datasource.jdbc.adapter.DorisJDBCAdapter;
+import com.cn.jmw.processor.datasource.jdbc.adapter.DorisJdbcAdapter;
 import com.cn.jmw.processor.datasource.pojo.IntoOutFile;
-import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;
+import com.cn.jmw.processor.datasource.pojo.JdbcConnectionEntity;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -13,13 +13,13 @@ import static org.junit.Assert.*;
 
 public class SynExportTest {
 
-    private DorisJDBCAdapter adapter;
+    private DorisJdbcAdapter adapter;
     private String label;
 
     @Before
     public void setUp() throws Exception {
-        JDBCConnectionEntity jdbcConnectionEntity = new JDBCConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "", "root", "123456aA!@");
-        adapter = DatabaseAdapterFactory.getAdapter(jdbcConnectionEntity, DorisJDBCAdapter.class);
+        JdbcConnectionEntity jdbcConnectionEntity = new JdbcConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "", "root", "123456aA!@");
+        adapter = DatabaseAdapterFactory.getAdapter(jdbcConnectionEntity, DorisJdbcAdapter.class);
         label = "1008615";//UUID.randomUUID().toString();
     }
 

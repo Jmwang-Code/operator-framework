@@ -3,7 +3,7 @@ package com.cn.jmw.processor.datasource.jdbc.adapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.factory.DatabaseAdapterFactory;
 import com.cn.jmw.processor.datasource.jdbc.inter.doris.pojo.ProcessListPojo;
-import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;
+import com.cn.jmw.processor.datasource.pojo.JdbcConnectionEntity;
 import com.cn.jmw.processor.datasource.pojo.ShowCreateTable;
 import org.junit.Before;
 import org.junit.Test;
@@ -12,12 +12,12 @@ import java.util.List;
 
 public class DorisJDBCAdapterTest {
 
-    private DorisJDBCAdapter adapter;
+    private DorisJdbcAdapter adapter;
 
     @Before
     public void setUp() throws Exception {
-        JDBCConnectionEntity jdbcConnectionEntity = new JDBCConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "", "root", "123456aA!@");
-        adapter = DatabaseAdapterFactory.getAdapter(jdbcConnectionEntity, DorisJDBCAdapter.class);
+        JdbcConnectionEntity jdbcConnectionEntity = new JdbcConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "", "root", "123456aA!@");
+        adapter = DatabaseAdapterFactory.getAdapter(jdbcConnectionEntity, DorisJdbcAdapter.class);
     }
 
     @Test

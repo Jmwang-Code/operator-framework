@@ -2,8 +2,8 @@ package com.cn.jmw.processor.datasource.export;
 
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.factory.DatabaseAdapterFactory;
-import com.cn.jmw.processor.datasource.jdbc.adapter.DorisJDBCAdapter;
-import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;
+import com.cn.jmw.processor.datasource.jdbc.adapter.DorisJdbcAdapter;
+import com.cn.jmw.processor.datasource.pojo.JdbcConnectionEntity;
 import com.cn.jmw.processor.datasource.pojo.ShowExport;
 import org.junit.Before;
 import org.junit.Test;
@@ -13,13 +13,13 @@ import java.util.List;
 
 public class ASynExportTest {
 
-    private DorisJDBCAdapter adapter;
+    private DorisJdbcAdapter adapter;
     private String label;
 
     @Before
     public void setUp() throws Exception {
-        JDBCConnectionEntity jdbcConnectionEntity = new JDBCConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "", "root", "123456aA!@");
-        adapter = DatabaseAdapterFactory.getAdapter(jdbcConnectionEntity, DorisJDBCAdapter.class);
+        JdbcConnectionEntity jdbcConnectionEntity = new JdbcConnectionEntity(DatabaseEnum.DORIS, "192.168.10.202", 9030, "", "root", "123456aA!@");
+        adapter = DatabaseAdapterFactory.getAdapter(jdbcConnectionEntity, DorisJdbcAdapter.class);
         label = "1008622";//UUID.randomUUID().toString();
     }
 
