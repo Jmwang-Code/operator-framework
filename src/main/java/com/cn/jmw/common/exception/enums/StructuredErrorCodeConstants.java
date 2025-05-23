@@ -58,6 +58,12 @@ public interface StructuredErrorCodeConstants {
     ErrorCode RANDOM_SAMPLING_NOT_ALLOW_KEYWORD = new ErrorCode(622, "随机采样不允许出现“ORDER BY”或者“LIMIT”关键字");
     ErrorCode RANDOM_SAMPLING_EXCEED_RECORDS = new ErrorCode(623, "随机抽样数量大于总记录数");
     ErrorCode INDEX_INFO_GET_ERROR = new ErrorCode(624, "索引信息获取失败");
+    //缺少 hostname 或 port
+    ErrorCode DATABASE_INPUT_TYPE_ERROR_1 = new ErrorCode(625, "缺少 hostname 或 port");
+    //缺少 databaseName
+    ErrorCode DATABASE_INPUT_TYPE_ERROR_2 = new ErrorCode(626, "缺少 databaseName");
+    //不支持的数据库类型
+    ErrorCode DATABASE_INPUT_TYPE_ERROR_3 = new ErrorCode(627, "不支持的数据库类型");
 
 
 }
