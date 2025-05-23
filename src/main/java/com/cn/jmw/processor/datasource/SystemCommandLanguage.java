@@ -8,19 +8,30 @@ import java.util.Map;
 
 /**
  * 系统命令语言
+ *
+ * @author Jmwang
  */
 public interface SystemCommandLanguage {
 
     /**
      * 查看指定表的状态
      *
-     * @param tableName 表名
+     * @param dbName 表名
      * @return 表状态
      */
-    Map<String, ShowTableStatusResult> showTableStatus(String tableName);
+    Map<String, ShowTableStatusResult> showTableStatus(String dbName);
 
     /**
-     * 资源管理 数据表阈值判定清理
+     * 查看指定表对应索引的状态
+     *
+     * @param tableName 表名
+     * @param indexName 索引名
+     * @return 表状态
+     */
+    Map<String, ShowTableStatusResult> showWideTableStatus(String tableName,String indexName);
+
+    /**
+     * <p>资源管理 数据表阈值判定清理</p>
      *
      * 定时任务达到阈值的时候 ，doris 表数据 批量删除
      * 计算当前阈值 比如百分之95 ，定时任务会降低掉百分之90
@@ -50,6 +61,7 @@ public interface SystemCommandLanguage {
     /**
      * 获取索引
      *
+     * @param connection 数据库连接
      * @param dbName 数据库
      * @param tableName 数据表
      * @return 索引
@@ -67,6 +79,8 @@ public interface SystemCommandLanguage {
 
     /**
      *  获取验证语句
+     *
+     * @return 验证语句
      */
     String getValidationQuery();
 }
