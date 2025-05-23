@@ -7,8 +7,10 @@ import org.bson.conversions.Bson;
  * <p>
  * 该类包含了与MongoDB查询相关的参数，例如集合名称和过滤器。
  * </p>
+ *
+ * @author Jmwang
  */
-public class MongoDBQuery implements NoSQLQuery {
+public class MongoDbQuery implements NoSqlQuery {
     /**
      * 集合名称，用于指定要查询的MongoDB集合。
      */

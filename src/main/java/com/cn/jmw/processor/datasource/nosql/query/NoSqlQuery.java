@@ -5,8 +5,10 @@ package com.cn.jmw.processor.datasource.nosql.query;
  * <p>
  * 该接口可以被具体的NoSQL查询实现类所实现，以提供特定的查询功能。
  * </p>
+ *
+ * @author Jmwang
  */
-public interface NoSQLQuery {
+public interface NoSqlQuery {
     // 此处可以定义NoSQL查询的相关方法，例如：
     // List<ResultType> executeQuery(QueryType query);
 }
