@@ -1,4 +1,4 @@
-package cn.jt.bds.framework.pojo;
+package com.cn.jmw.pojo;
 
 import java.util.Objects;
 
