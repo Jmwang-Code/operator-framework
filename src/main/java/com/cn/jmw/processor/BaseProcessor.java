@@ -9,24 +9,33 @@ import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
 /**
  * 基本处理器抽象类，实现了Processor接口。该类提供了关于输入数据类型的处理能力。
  *
+ * @author Jmwang
  * @param <T> 输入数据类型
  * @param <R> 输出数据类型
  */
 public abstract class BaseProcessor<T, R> implements Processor<T, R> {
 
-    private final Type inputType;  // 输入数据的类型
-    private Object[] data;  // 可变参数字段，用于存储额外数据
+    /**
+     * 输入数据的类型
+     */
+    private final Type inputType;
+
+    /**
+     * 可变参数字段，用于存储额外数据
+     */
+    private Object[] data;
 
     /**
      * 默认构造函数，自动获取输入数据的类型。
-     * @throws Exception 如果未提供类型参数，将抛出异常
      */
     public BaseProcessor() {
         try {
             ParameterizedType genericSuperclass = (ParameterizedType) getClass().getGenericSuperclass();
-            this.inputType = genericSuperclass.getActualTypeArguments()[0]; // 获取类型参数
+            //获取类型参数
+            this.inputType = genericSuperclass.getActualTypeArguments()[0];
         } catch (ClassCastException e) {
-            throw exception(MUST_PROVIDE_TYPE_PARAMETER); // 抛出类型参数未提供的异常
+            //抛出类型参数未提供的异常
+            throw exception(MUST_PROVIDE_TYPE_PARAMETER);
         }
     }
 
@@ -36,7 +45,7 @@ public abstract class BaseProcessor<T, R> implements Processor<T, R> {
      * @param inputType 指定的输入数据类型
      */
     public BaseProcessor(Type inputType) {
-        this.inputType = inputType; // 设置输入数据类型
+        this.inputType = inputType;
     }
 
     /**
@@ -44,8 +53,9 @@ public abstract class BaseProcessor<T, R> implements Processor<T, R> {
      *
      * @return 输入数据的类型
      */
+    @Override
     public Type getInputType() {
-        return inputType; // 返回输入数据类型
+        return inputType;
     }
 
     /**
@@ -53,8 +63,9 @@ public abstract class BaseProcessor<T, R> implements Processor<T, R> {
      *
      * @param data 可变参数，额外的数据
      */
+    @Override
     public void setData(Object... data) {
-        this.data = data; // 设置额外数据
+        this.data = data;
     }
 
     /**
@@ -62,8 +73,9 @@ public abstract class BaseProcessor<T, R> implements Processor<T, R> {
      *
      * @return 额外数据的数组
      */
+    @Override
     public Object[] getData() {
-        return data; // 返回额外数据数组
+        return data;
     }
 
     /**

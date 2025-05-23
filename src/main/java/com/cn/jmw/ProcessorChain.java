@@ -11,20 +11,20 @@ import java.util.List;
 import java.util.function.Function;
 
 import static com.cn.jmw.common.exception.enums.StructuredErrorCodeConstants.*;
-import static com.cn.jmw.common.exception.enums.StructuredErrorCodeConstants.INPUT_NOT_ALLOWED_EMPTY;
-import static com.cn.jmw.common.exception.enums.StructuredErrorCodeConstants.INPUT_TYPE_NOT_MATCH;
-import static com.cn.jmw.common.exception.enums.StructuredErrorCodeConstants.UNABLE_TO_CREATE_PROCESSOR_INSTANCE;
 import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.*;
-import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
 
 /**
  * ProcessorChain类用于管理和执行处理器链。
  * <p>
  * 此类封装了多个处理器，通过输入上下文逐个处理输入数据，并将结果存储在上下文中。
  * </p>
+ *
+ * @author Jmwang
  */
 public class ProcessorChain {
-    // 处理器列表
+    /**
+     * 处理器列表
+     */
     private List<Processor> processors;
 
     private ProcessorChain() {
@@ -53,6 +53,11 @@ public class ProcessorChain {
             throw exception(INPUT_NOT_ALLOWED_EMPTY);
         }
         for (Processor processor : processors) {
+            //检测到打断动作后会直接停止当前线程任务
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException("ProcessorChain 中检测到中断");
+            }
+
             // 验证输入类型
             if (input == null && processor.getInputType() != Void.class) {
                 throw exception(INPUT_TYPE_NOT_MATCH);
@@ -60,8 +65,7 @@ public class ProcessorChain {
             if (input != null) {
                 Type inputType = processor.getInputType();
                 // 检查输入类型是否是参数化类型
-                if (inputType instanceof ParameterizedType) {
-                    ParameterizedType parameterizedType = (ParameterizedType) inputType;
+                if (inputType instanceof ParameterizedType parameterizedType) {
                     Type rawType = parameterizedType.getRawType();
                     // 检查原始类型是否是List
                     if (!(rawType instanceof Class) || !List.class.isAssignableFrom((Class<?>) rawType)) {
@@ -74,7 +78,7 @@ public class ProcessorChain {
                     }
                     // 检查输入的泛型类型是否匹配
                     if (input instanceof List && !((List<?>) input).isEmpty()) {
-                        Object firstItem = ((List<?>) input).get(0);
+                        Object firstItem = ((List<?>) input).getFirst();
                         if (!firstItem.getClass().isAssignableFrom((Class<?>) actualTypeArguments[0])) {
                             throw exception(INPUT_TYPE_NOT_MATCH);
                         }
@@ -130,7 +134,7 @@ public class ProcessorChain {
          * @return Builder对象
          */
         public Builder addProcessor(Class<? extends Processor> processorClass) {
-            addProcessor(processorClass, null);
+            addProcessor(processorClass,  null);
             return this;
         }
 
@@ -162,11 +166,11 @@ public class ProcessorChain {
                 private Object[] data;  // 添加data字段
 
                 {
-                    this.data = data; // 设置data字段的值
+                    this.data = null; // 设置data字段的值
                 }
 
                 @Override
-                public R process(T input, Object... data) throws Exception {
+                public R process(T input, Object... data) {
                     return function.apply(input); // 使用function来处理输入
                 }
 

@@ -15,6 +15,7 @@ import java.lang.reflect.Type;
  * 你可以为每一个自定义的处理器创建一个接口，这个接口继承Processor接口。
  * </p>
  *
+ * @author Jmwang
  * @param <T> 输入数据类型
  * @param <R> 输出数据类型
  */
