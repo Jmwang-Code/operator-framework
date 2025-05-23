@@ -4,11 +4,13 @@ package com.cn.jmw.processor.datasource.jdbc.dialect.pojo;
 import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLOperatorEnum;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
+/**
+ * @author Jmwang
+ */
 public class QueryConditionBuilder {
-    private List<QueryCondition> conditions = new ArrayList<>();
+    private final List<com.cn.jmw.processor.datasource.jdbc.dialect.pojo.QueryCondition> conditions = new ArrayList<>();
     private SQLOperatorEnum operator;
 
     public QueryConditionBuilder setOperator(SQLOperatorEnum operator) {
@@ -17,21 +19,21 @@ public class QueryConditionBuilder {
     }
 
     public QueryConditionBuilder addCondition(String field, SQLOperatorEnum operator) {
-        conditions.add(new QueryCondition(field, operator));
+        conditions.add(new com.cn.jmw.processor.datasource.jdbc.dialect.pojo.QueryCondition(field, operator));
         return this;
     }
 
     public QueryConditionBuilder addCondition(String field, SQLOperatorEnum operator, Object value) {
-        conditions.add(new QueryCondition(field, operator, value));
+        conditions.add(new com.cn.jmw.processor.datasource.jdbc.dialect.pojo.QueryCondition(field, operator, value));
         return this;
     }
 
     public QueryConditionBuilder addNestedCondition(QueryConditionBuilder nestedBuilder) {
-        conditions.add(new QueryCondition(conditions, operator));
+        conditions.add(new com.cn.jmw.processor.datasource.jdbc.dialect.pojo.QueryCondition(conditions, operator));
         return this;
     }
 
-    public QueryCondition build() {
-        return new QueryCondition(conditions, operator);
+    public com.cn.jmw.processor.datasource.jdbc.dialect.pojo.QueryCondition build() {
+        return new com.cn.jmw.processor.datasource.jdbc.dialect.pojo.QueryCondition(conditions, operator);
     }
 }

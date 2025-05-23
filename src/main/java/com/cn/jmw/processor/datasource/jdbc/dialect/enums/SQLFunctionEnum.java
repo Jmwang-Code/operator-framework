@@ -1,13 +1,18 @@
 package com.cn.jmw.processor.datasource.jdbc.dialect.enums;
 
 
+import lombok.Getter;
+
 /**
  * QueryFunctionEnum 枚举表示 SQL 查询中可用的函数。
  * <p>
  * 此枚举包含各种聚合和日期函数，以及相应的描述和参数数量。
  * </p>
+ *
+ * @author Jmwang
  */
-public enum SQLFunctionEnum implements SQLDQL{
+@Getter
+public enum SQLFunctionEnum implements com.cn.jmw.processor.datasource.jdbc.dialect.enums.SqlDql {
 
     /**
      * 去重
@@ -145,22 +150,6 @@ public enum SQLFunctionEnum implements SQLDQL{
         this.functionName = functionName;
         this.description = description;
         this.numParams = numParams;
-    }
-
-    public String getFunctionName() {
-        return functionName;
-    }
-
-    public String getFunction() {
-        return function;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public int getNumParams() {
-        return numParams;
     }
 
 

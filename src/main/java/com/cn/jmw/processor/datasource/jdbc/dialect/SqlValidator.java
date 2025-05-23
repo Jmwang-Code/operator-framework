@@ -1,7 +1,6 @@
 package com.cn.jmw.processor.datasource.jdbc.dialect;
 
 import net.sf.jsqlparser.JSQLParserException;
-import net.sf.jsqlparser.expression.Alias;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
@@ -16,7 +15,6 @@ import net.sf.jsqlparser.statement.update.Update;
 import org.junit.Test;
 
 import java.util.*;
-import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertFalse;
 
@@ -25,17 +23,19 @@ import static org.junit.Assert.assertFalse;
  * 拼SQL
  * 主要是看防止value注入的问题
  *
- *
- * 解析SQL字符串
+ * <p>解析SQL字符串</p>
  * 1.
  * 防止系统函数 系统表 系统命令 全部禁用
- *
  * 2.
  * 黑名单关键表名 字段名 无法使用
+ *
+ * @author Jmwang
  */
-public class SQLValidator {
+public class SqlValidator {
 
-    // 定义白名单（允许的表名和字段名）
+    /**
+     * 定义白名单（允许的表名和字段名）
+     */
     private static final Set<String> ALLOWED_TABLES = new HashSet<>(Arrays.asList("users", "orders", "products"));
     private static final Map<String, Set<String>> ALLOWED_FIELDS = new HashMap<>();
 
@@ -45,12 +45,18 @@ public class SQLValidator {
         ALLOWED_FIELDS.put("products", new HashSet<>(Arrays.asList("id", "name", "price")));
     }
 
-    // 定义黑名单（禁止的表名和字段名）
+    /**
+     * 定义黑名单（禁止的表名和字段名）
+     */
     private static final Set<String> BLACKLISTED_TABLES = new HashSet<>(Arrays.asList("system_users"));
     private static final Set<String> BLACKLISTED_FIELDS = new HashSet<>(Arrays.asList("password", "username"));
 
-    // 验证 SQL 语句
-    public static boolean validateSQL(String sql) {
+    /**
+     * 验证 SQL 语句
+     * @param sql SQL
+     * @return 是否合法
+     */
+    public static boolean validateSql(String sql) {
         try {
             Statement statement = CCJSqlParserUtil.parse(sql);
 
@@ -103,7 +109,7 @@ public class SQLValidator {
             // ...
             return true;
         }
-        return false; // 处理其他类型的 SelectBody
+        return false;
     }
 
     private static boolean validatePlainSelect(PlainSelect plainSelect) {
@@ -128,14 +134,18 @@ public class SQLValidator {
         return validateWhere(plainSelect.getWhere());
     }
 
-    // 添加辅助方法，用于递归验证 SelectBody
+    /**
+     * 添加辅助方法，用于递归验证 SelectBody
+     * @param selectBody SelectBody
+     * @return 是否合法
+     */
     private static boolean validateSelectBody(Select selectBody) {
         if (selectBody instanceof PlainSelect) {
             return validatePlainSelect((PlainSelect) selectBody);
         } else if (selectBody instanceof SetOperationList) {
-            return validateSelect((Select) selectBody);
+            return validateSelect(selectBody);
         }
-        return false; // 处理其他类型的 SelectBody
+        return false;
     }
 
     private static boolean validateInsert(Insert insert) {
@@ -243,7 +253,7 @@ public class SQLValidator {
 
         String sqlInjectionSingleQuote = "admin' OR '1'='1";
         String vulnerableSQLSingleQuote = "SELECT * FROM users WHERE name = '" + sqlInjectionSingleQuote + "'";
-        boolean isValidSingleQuote = SQLValidator.validateSQL(vulnerableSQLSingleQuote);
+        boolean isValidSingleQuote = SqlValidator.validateSql(vulnerableSQLSingleQuote);
         assertFalse(isValidSingleQuote);
 
 
@@ -251,7 +261,7 @@ public class SQLValidator {
 
         String sqlInjectionComment = "admin'; --";
         String vulnerableSQLComment = "SELECT * FROM users WHERE name = '" + sqlInjectionComment + "'";
-        boolean isValidComment = SQLValidator.validateSQL(vulnerableSQLComment);
+        boolean isValidComment = SqlValidator.validateSql(vulnerableSQLComment);
         assertFalse(isValidComment);
 
 
@@ -259,7 +269,7 @@ public class SQLValidator {
 
         String sqlInjectionSemicolon = "admin'; TRUNCATE TABLE users; --";
         String vulnerableSQLSemicolon = "SELECT * FROM users WHERE name = '" + sqlInjectionSemicolon + "'";
-        boolean isValidSemicolon = SQLValidator.validateSQL(vulnerableSQLSemicolon);
+        boolean isValidSemicolon = SqlValidator.validateSql(vulnerableSQLSemicolon);
         assertFalse(isValidSemicolon);
 
 
@@ -267,7 +277,7 @@ public class SQLValidator {
 
         String sqlInjectionUnion = "' UNION SELECT null, null, username, password FROM admin --";
         String vulnerableSQLUnion = "SELECT creator, user_id, email FROM users WHERE name = '" + sqlInjectionUnion + "'";
-        boolean isValidUnion = SQLValidator.validateSQL(vulnerableSQLUnion);
+        boolean isValidUnion = SqlValidator.validateSql(vulnerableSQLUnion);
         assertFalse(isValidUnion);
 
 
@@ -275,7 +285,7 @@ public class SQLValidator {
 
         String sqlInjectionTime = "'; WAITFOR DELAY '00:00:05'; --";
         String vulnerableSQLTime = "SELECT * FROM users WHERE name = '" + sqlInjectionTime + "'";
-        boolean isValidTime = SQLValidator.validateSQL(vulnerableSQLTime);
+        boolean isValidTime = SqlValidator.validateSql(vulnerableSQLTime);
         assertFalse(isValidTime);
 
 
@@ -283,7 +293,7 @@ public class SQLValidator {
 
         String sqlInjectionError = "'; SELECT 1/0; --";
         String vulnerableSQLError = "SELECT * FROM users WHERE name = '" + sqlInjectionError + "'";
-        boolean isValidError = SQLValidator.validateSQL(vulnerableSQLError);
+        boolean isValidError = SqlValidator.validateSql(vulnerableSQLError);
         assertFalse(isValidError);
 
     }
@@ -293,21 +303,21 @@ public class SQLValidator {
     public void testBooleanInjection() {
         String sqlInjectionBoolean = "' OR '1'='1";
         String vulnerableSQLBoolean = "SELECT * FROM users WHERE name = '" + sqlInjectionBoolean + "'";
-        boolean isValidBoolean = SQLValidator.validateSQL(vulnerableSQLBoolean);
+        boolean isValidBoolean = SqlValidator.validateSql(vulnerableSQLBoolean);
         assertFalse(isValidBoolean);
 
         // 基于注释的注入
         System.out.println("————————————————————— 布尔注入.基于注释的注入： ———————————————————————");
         String sqlInjectionComment = "admin'; --";
         String vulnerableSQLComment = "SELECT * FROM users WHERE name = '" + sqlInjectionComment + "'";
-        boolean isValidBoolean2 = SQLValidator.validateSQL(vulnerableSQLComment);
+        boolean isValidBoolean2 = SqlValidator.validateSql(vulnerableSQLComment);
         assertFalse(isValidBoolean2);
 
         // 基于井号的注入
         System.out.println("————————————————————— 布尔注入.基于井号的注入： ———————————————————————");
         String sqlInjectionHash = "admin' OR '1'='1'#";
         String vulnerableSQLHash = "SELECT * FROM users WHERE name = '" + sqlInjectionHash + "'";
-        boolean isValidBoolean4 = SQLValidator.validateSQL(vulnerableSQLHash);
+        boolean isValidBoolean4 = SqlValidator.validateSql(vulnerableSQLHash);
         assertFalse(isValidBoolean4);
 
 
@@ -315,7 +325,7 @@ public class SQLValidator {
         System.out.println("————————————————————— 布尔注入.基于单引号的注入： ———————————————————————");
         String sqlInjectionQuote = "admin' OR '1'='1'";
         String vulnerableSQLQuote = "SELECT * FROM users WHERE name = '" + sqlInjectionQuote + "'";
-        boolean isValidBoolean5 = SQLValidator.validateSQL(vulnerableSQLQuote);
+        boolean isValidBoolean5 = SqlValidator.validateSql(vulnerableSQLQuote);
         assertFalse(isValidBoolean5);
 
 
@@ -323,7 +333,7 @@ public class SQLValidator {
         System.out.println("————————————————————— 布尔注入.基于通配符的注入： ———————————————————————");
         String sqlInjectionWildcard = "admin' OR name LIKE '%a%'";
         String vulnerableSQLWildcard = "SELECT * FROM users WHERE name = '" + sqlInjectionWildcard + "'";
-        boolean isValidBoolean6 = SQLValidator.validateSQL(vulnerableSQLWildcard);
+        boolean isValidBoolean6 = SqlValidator.validateSql(vulnerableSQLWildcard);
         assertFalse(isValidBoolean6);
 
 
@@ -331,7 +341,7 @@ public class SQLValidator {
         System.out.println("————————————————————— 布尔注入.基于等号的注入： ———————————————————————");
         String sqlInjectionEqual = "admin' OR 1=1";
         String vulnerableSQLEqual = "SELECT * FROM users WHERE name = '" + sqlInjectionEqual + "'";
-        boolean isValidBoolean7 = SQLValidator.validateSQL(vulnerableSQLEqual);
+        boolean isValidBoolean7 = SqlValidator.validateSql(vulnerableSQLEqual);
         assertFalse(isValidBoolean7);
 
 
@@ -339,7 +349,7 @@ public class SQLValidator {
         System.out.println("————————————————————— 布尔注入.基于分号的注入： ———————————————————————");
         String sqlInjectionSemicolon = "admin'; TRUNCATE TABLE users; --";
         String vulnerableSQLSemicolon = "SELECT * FROM users WHERE name = '" + sqlInjectionSemicolon + "'";
-        boolean isValidBoolean8 = SQLValidator.validateSQL(vulnerableSQLSemicolon);
+        boolean isValidBoolean8 = SqlValidator.validateSql(vulnerableSQLSemicolon);
         assertFalse(isValidBoolean8);
 
 
@@ -347,7 +357,7 @@ public class SQLValidator {
         System.out.println("————————————————————— 布尔注入.基于恶意关键字的注入： ———————————————————————");
         String sqlInjectionKeyword = "admin'; DROP TABLE users; --";
         String vulnerableSQLKeyword = "SELECT * FROM users WHERE name = '" + sqlInjectionKeyword + "'";
-        boolean isValidBoolean9 = SQLValidator.validateSQL(vulnerableSQLKeyword);
+        boolean isValidBoolean9 = SqlValidator.validateSql(vulnerableSQLKeyword);
         assertFalse(isValidBoolean9);
     }
 
@@ -356,25 +366,25 @@ public class SQLValidator {
         //基于除零错误的注入
         String sqlInjectionError = "'; SELECT 1/0; --";
         String vulnerableSQLError = "SELECT * FROM users WHERE name = '" + sqlInjectionError + "'";
-        boolean isValidError = SQLValidator.validateSQL(vulnerableSQLError);
+        boolean isValidError = SqlValidator.validateSql(vulnerableSQLError);
         assertFalse(isValidError);
 
         //基于索引错误的注入
         String sqlInjectionIndexOutOfBounds = "'; SELECT column999 FROM users; --";
         String vulnerableSQLIndexOutOfBounds = "SELECT * FROM users WHERE username = '" + sqlInjectionIndexOutOfBounds + "'";
-        boolean isValidIndexOutOfBounds = SQLValidator.validateSQL(vulnerableSQLIndexOutOfBounds);
+        boolean isValidIndexOutOfBounds = SqlValidator.validateSql(vulnerableSQLIndexOutOfBounds);
         assertFalse(isValidIndexOutOfBounds);
 
         //基于类型转换错误的注入
         String sqlInjectionTypeConversion = "'; SELECT CAST(username AS INT) FROM users; --";
         String vulnerableSQLTypeConversion = "SELECT * FROM users WHERE username = '" + sqlInjectionTypeConversion + "'";
-        boolean isValidTypeConversion = SQLValidator.validateSQL(vulnerableSQLTypeConversion);
+        boolean isValidTypeConversion = SqlValidator.validateSql(vulnerableSQLTypeConversion);
         assertFalse(isValidTypeConversion);
 
         //基于执行存储过程的注入
         String sqlInjectionExecuteProcedure = "'; EXEC sp_dropuser 'admin'; --";
         String vulnerableSQLExecuteProcedure = "SELECT * FROM users WHERE username = '" + sqlInjectionExecuteProcedure + "'";
-        boolean isValidExecuteProcedure = SQLValidator.validateSQL(vulnerableSQLExecuteProcedure);
+        boolean isValidExecuteProcedure = SqlValidator.validateSql(vulnerableSQLExecuteProcedure);
         assertFalse(isValidExecuteProcedure);
     }
 
@@ -394,7 +404,7 @@ public class SQLValidator {
         StringBuilder builder = new StringBuilder();
         builder.append("┌" + repeatCharacter('—', width) + "—┐" + "\n");
         for (int i = 0;i<lines.length;i++) {
-                builder.append("│" + padString(lines[i], width) + "\n");
+            builder.append("│" + padString(lines[i], width) + "\n");
         }
         builder.append("└" + repeatCharacter('—', width) + "—┘" + "\n");
 
@@ -412,7 +422,8 @@ public class SQLValidator {
 
     public static String padString(String input, int width) {
         int inputLength = input.length();
-        int paddingSize = width - inputLength - 2; // 减去两侧的'│'
+        // 减去两侧的'│'
+        int paddingSize = width - inputLength - 2;
         if (paddingSize < 0) {
             // 如果字符串太长，无法完全居中，可以选择截断或抛出异常
             throw new IllegalArgumentException("Input string is too long to fit in the specified width.");

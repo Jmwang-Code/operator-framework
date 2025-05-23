@@ -16,55 +16,86 @@ import org.jooq.impl.DSL;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
  * SQLQueryBuilder类用于构建SQL查询，包括选择、条件、连接和排序等功能。
  * 它使用构建者模式使得查询的构建变得灵活和可读。
+ *
+ * @author Jmwang
  */
 @Slf4j
 @NoArgsConstructor
-public class SQLQueryBuilder {
-    //SQL方言
+public class SqlQueryBuilder {
+    /**
+     * SQL方言
+     */
     @JsonProperty("SQLDialect")
     private SQLDialect sqlDialect = SQLDialect.MYSQL;
-    //数据库名称
+    /**
+     * 数据库名称
+     */
     @JsonProperty("dbName")
     private String dbName;
-    //模式
+    /**
+     * 模式
+     */
     @JsonProperty("schemaName")
     private String schemaName;
-    //表列表
+    /**
+     * 表列表
+     */
     @JsonProperty("tables")
     private QueryTable table;
-    //字段列表
+    /**
+     * 字段列表
+     */
     @JsonProperty("fields")
     private List<QueryField> fields = new ArrayList<>();
-    //where字段条件
+    /**
+     * where字段条件
+     */
     @JsonProperty("conditions")
     private List<QueryCondition> conditions = new ArrayList<>();
-    //扩展String where
+    /**
+     * 扩展String where
+     */
     @JsonProperty("stringConditions")
     private List<QueryStringCondition> stringConditions = new ArrayList<>();
-    //级联
+    /**
+     * 级联
+     */
     @JsonProperty("joins")
     private List<QueryJoin> joins = new ArrayList<>();
-    //分组
+    /**
+     * 分组
+     */
     @JsonProperty("groups")
-    private List<String> groups = new ArrayList<>();
-    //having字段条件
+    private List<QueryGroup> groups = new ArrayList<>();
+    /**
+     * having字段条件
+     */
     @JsonProperty("havingConditions")
     private List<QueryCondition> havingConditions = new ArrayList<>();
-    //扩展String having字段条件
+    /**
+     * 扩展String having字段条件
+     */
     @JsonProperty("stringHavingConditions")
     private List<QueryStringCondition> stringHavingConditions = new ArrayList<>();
-    //排序
+    /**
+     * 排序
+     */
     @JsonProperty("orders")
     private List<QueryOrderBy> orders = new ArrayList<>();
-    //限制条数
+    /**
+     * 限制条数
+     */
     @JsonProperty("limit")
     private Integer limit;
-    //起始条数
+    /**
+     * 起始条数
+     */
     @JsonProperty("offset")
     private Integer offset;
 
@@ -74,7 +105,7 @@ public class SQLQueryBuilder {
      * @param field 字段名
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addField(String field) {
+    public SqlQueryBuilder addField(String field) {
         this.fields.add(new QueryField(new String[]{field}, null, null, null));
         return this;
     }
@@ -86,7 +117,7 @@ public class SQLQueryBuilder {
      * @param field     字段名
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addField(String tableName, String field) {
+    public SqlQueryBuilder addField(String tableName, String field) {
         this.fields.add(new QueryField(new String[]{field}, null, null, tableName));
         return this;
     }
@@ -99,7 +130,7 @@ public class SQLQueryBuilder {
      * @param fieldAlias 字段别名
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addField(String tableName, String field, String fieldAlias) {
+    public SqlQueryBuilder addField(String tableName, String field, String fieldAlias) {
         this.fields.add(new QueryField(new String[]{field}, fieldAlias, null, tableName));
         return this;
     }
@@ -112,7 +143,7 @@ public class SQLQueryBuilder {
      * @param functionEnum 字段函数类型
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addField(String field, String fieldAlias, SQLFunctionEnum functionEnum) {
+    public SqlQueryBuilder addField(String field, String fieldAlias, SQLFunctionEnum functionEnum) {
         this.fields.add(new QueryField(new String[]{field}, fieldAlias, functionEnum, null));
         return this;
     }
@@ -125,7 +156,7 @@ public class SQLQueryBuilder {
      * @param functionEnum 字段函数类型
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addField(String[] field, String fieldAlias, SQLFunctionEnum functionEnum) {
+    public SqlQueryBuilder addField(String[] field, String fieldAlias, SQLFunctionEnum functionEnum) {
         this.fields.add(new QueryField(field, fieldAlias, functionEnum, null));
         return this;
     }
@@ -136,7 +167,7 @@ public class SQLQueryBuilder {
      * @param fields 字段集合
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addFields(Collection<String> fields) {
+    public SqlQueryBuilder addFields(Collection<String> fields) {
         for (String field : fields) {
             this.fields.add(new QueryField(new String[]{field}, null, null, null));
         }
@@ -149,10 +180,8 @@ public class SQLQueryBuilder {
      * @param queryField 查询字段集合
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addFields(List<QueryField> queryField) {
-        for (QueryField field : queryField) {
-            this.fields.add(field);
-        }
+    public SqlQueryBuilder addFields(List<QueryField> queryField) {
+        this.fields.addAll(queryField);
         return this;
     }
 
@@ -165,7 +194,7 @@ public class SQLQueryBuilder {
      * @param operatorEnum 连接符
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addCondition(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum operatorEnum) {
+    public SqlQueryBuilder addCondition(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum operatorEnum) {
         if (isNullAndLog(field, value)) {
             return this;
         }
@@ -181,7 +210,7 @@ public class SQLQueryBuilder {
      * @param value    条件值
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addAndCondition(String field, SQLOperatorEnum operator, Object value) {
+    public SqlQueryBuilder addAndCondition(String field, SQLOperatorEnum operator, Object value) {
         if (isNullAndLog(field, value)) {
             return this;
         }
@@ -189,7 +218,7 @@ public class SQLQueryBuilder {
         return this;
     }
 
-    public SQLQueryBuilder addAndCondition(String tableName, String field, SQLOperatorEnum operator, Object value) {
+    public SqlQueryBuilder addAndCondition(String tableName, String field, SQLOperatorEnum operator, Object value) {
         if (isNullAndLog(field, value)) {
             return this;
         }
@@ -204,7 +233,7 @@ public class SQLQueryBuilder {
      * @param operator 操作符
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addAndCondition(String field, SQLOperatorEnum operator) {
+    public SqlQueryBuilder addAndCondition(String field, SQLOperatorEnum operator) {
         this.conditions.add(new QueryCondition(field, operator, null, SQLOperatorEnum.AND));
         return this;
     }
@@ -217,7 +246,7 @@ public class SQLQueryBuilder {
      * @param value    条件值
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addOrCondition(String field, SQLOperatorEnum operator, Object value) {
+    public SqlQueryBuilder addOrCondition(String field, SQLOperatorEnum operator, Object value) {
         if (isNullAndLog(field, value)) {
             return this;
         }
@@ -232,7 +261,7 @@ public class SQLQueryBuilder {
      * @param operator 操作符
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addOrCondition(String field, SQLOperatorEnum operator) {
+    public SqlQueryBuilder addOrCondition(String field, SQLOperatorEnum operator) {
         this.conditions.add(new QueryCondition(field, operator, null, SQLOperatorEnum.OR));
         return this;
     }
@@ -243,7 +272,7 @@ public class SQLQueryBuilder {
      * @param condition QueryCondition实例
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addCondition(QueryCondition condition) {
+    public SqlQueryBuilder addCondition(QueryCondition condition) {
         this.conditions.add(condition);
         return this;
     }
@@ -257,7 +286,7 @@ public class SQLQueryBuilder {
      * @param condition 条件字符串
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addStringCondition(String condition) {
+    public SqlQueryBuilder addStringCondition(String condition) {
         if (StringUtils.isNotBlank(condition)) {
             QueryStringCondition queryCondition = new QueryStringCondition(condition, SQLOperatorEnum.AND);
             this.stringConditions.add(queryCondition);
@@ -274,7 +303,7 @@ public class SQLQueryBuilder {
      * @param condition 条件字符串
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addOrStringCondition(String condition) {
+    public SqlQueryBuilder addOrStringCondition(String condition) {
         if (StringUtils.isNotBlank(condition)) {
             QueryStringCondition queryCondition = new QueryStringCondition(condition, SQLOperatorEnum.OR);
             this.stringConditions.add(queryCondition);
@@ -288,7 +317,7 @@ public class SQLQueryBuilder {
      * @param conditions QueryCondition集合
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addAndConditions(Collection<QueryCondition> conditions) {
+    public SqlQueryBuilder addAndConditions(Collection<QueryCondition> conditions) {
         for (QueryCondition condition : conditions) {
             this.conditions.add(new QueryCondition(condition.getField(), condition.getOperator(), condition.getValue(), SQLOperatorEnum.AND));
         }
@@ -301,7 +330,7 @@ public class SQLQueryBuilder {
      * @param conditions QueryCondition集合
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addOrConditions(Collection<QueryCondition> conditions) {
+    public SqlQueryBuilder addOrConditions(Collection<QueryCondition> conditions) {
         for (QueryCondition condition : conditions) {
             this.conditions.add(new QueryCondition(condition.getField(), condition.getOperator(), condition.getValue(), SQLOperatorEnum.OR));
         }
@@ -322,9 +351,10 @@ public class SQLQueryBuilder {
      *                   当前实例，无需进行任何更改。
      * @return 用于方法链的“SQLQueryBuilder”的当前实例。
      */
-    public SQLQueryBuilder addNestingConditions(QueryCondition... conditions) {
+    public SqlQueryBuilder addNestingConditions(QueryCondition... conditions) {
         if (conditions == null || conditions.length == 0) {
-            return this; // 如果没有条件，直接返回
+            // 如果没有条件，直接返回
+            return this;
         }
 
         for (int i = 0; i < conditions.length; i++) {
@@ -334,8 +364,9 @@ public class SQLQueryBuilder {
                 this.conditions.add(queryCondition);
             } else {
                 // 将当前条件嵌套到前一个条件中
-                QueryCondition previousCondition = this.conditions.get(this.conditions.size() - 1);
-                previousCondition.addNestedCondition(queryCondition); // Assuming addNestedCondition is implemented properly
+                QueryCondition previousCondition = this.conditions.getLast();
+                // 假设addNestedCondition已正确实现
+                previousCondition.addNestedCondition(queryCondition);
             }
         }
         return this;
@@ -350,7 +381,7 @@ public class SQLQueryBuilder {
      * @param onCondition 条件
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addJoin(SQLJoinEnum type, SQLQueryBuilder subQuery, String alias, String onCondition) {
+    public SqlQueryBuilder addJoin(SQLJoinEnum type, SqlQueryBuilder subQuery, String alias, String onCondition) {
         this.joins.add(new QueryJoin(type, subQuery, alias, onCondition));
         return this;
     }
@@ -364,7 +395,7 @@ public class SQLQueryBuilder {
      * @param onCondition 连接条件
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addJoin(SQLJoinEnum type, String table, String alias, String onCondition) {
+    public SqlQueryBuilder addJoin(SQLJoinEnum type, String table, String alias, String onCondition) {
         this.joins.add(new QueryJoin(type, table, alias, onCondition));
         return this;
     }
@@ -375,8 +406,9 @@ public class SQLQueryBuilder {
      * @param group 分组字段
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addGroup(String group) {
-        this.groups.add(group);
+    public SqlQueryBuilder addGroup(String group) {
+        QueryGroup queryGroup = new QueryGroup(group);
+        this.groups.add(queryGroup);
         return this;
     }
 
@@ -386,14 +418,26 @@ public class SQLQueryBuilder {
      * @param groups 分组字段集合
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addGroups(Collection<String> groups) {
-        for (String group : groups) {
-            this.groups.add(group);
-        }
+    public SqlQueryBuilder addGroups(Collection<String> groups) {
+        List<QueryGroup> queryGroups = groups.stream()
+                .map(group -> new QueryGroup(group))
+                .collect(Collectors.toList());
+        this.groups.addAll(queryGroups);
         return this;
     }
 
-    public SQLQueryBuilder addHavingConditions(String field, SQLOperatorEnum operator, Object value) {
+    /**
+     * 向SQLQueryBuilder添加多个分组字段。
+     *
+     * @param groups 分组字段集合
+     * @return 当前SQLQueryBuilder实例，以支持方法链调用
+     */
+    public SqlQueryBuilder addQueryGroups(Collection<QueryGroup> groups) {
+        this.groups.addAll(groups);
+        return this;
+    }
+
+    public SqlQueryBuilder addHavingConditions(String field, SQLOperatorEnum operator, Object value) {
         if (isNullAndLog(field, value)) {
             return this;
         }
@@ -401,7 +445,7 @@ public class SQLQueryBuilder {
         return this;
     }
 
-    public SQLQueryBuilder addHavingCondition(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum operatorEnum) {
+    public SqlQueryBuilder addHavingCondition(String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum operatorEnum) {
         if (isNullAndLog(field, value)) {
             return this;
         }
@@ -420,7 +464,7 @@ public class SQLQueryBuilder {
      * @param functionParams 函数参数
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addHavingConditions(SQLFunctionEnum function, String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum joinOperator, List<Object> functionParams) {
+    public SqlQueryBuilder addHavingConditions(SQLFunctionEnum function, String field, SQLOperatorEnum operator, Object value, SQLOperatorEnum joinOperator, List<Object> functionParams) {
         if (isNullAndLog(field, value)) {
             return this;
         }
@@ -434,7 +478,7 @@ public class SQLQueryBuilder {
      * @param havingConditions QueryCondition实例
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    private SQLQueryBuilder addHavingConditions(QueryCondition havingConditions) {
+    private SqlQueryBuilder addHavingConditions(QueryCondition havingConditions) {
         this.havingConditions.add(havingConditions);
         return this;
     }
@@ -447,7 +491,7 @@ public class SQLQueryBuilder {
      * @param isAlias 是否为别名
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addOrder(String field, SQLOperatorEnum order, boolean isAlias) {
+    public SqlQueryBuilder addOrder(String field, SQLOperatorEnum order, boolean isAlias) {
         this.addOrder(new QueryOrderBy(field, order, isAlias));
         return this;
     }
@@ -459,7 +503,7 @@ public class SQLQueryBuilder {
      * @param order 排序方式（升序或降序）
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder addOrder(String field, SQLOperatorEnum order) {
+    public SqlQueryBuilder addOrder(String field, SQLOperatorEnum order) {
         this.addOrder(new QueryOrderBy(field, order));
         return this;
     }
@@ -470,7 +514,7 @@ public class SQLQueryBuilder {
      * @param order QueryOrderBy实例
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    private SQLQueryBuilder addOrder(QueryOrderBy order) {
+    private SqlQueryBuilder addOrder(QueryOrderBy order) {
         this.orders.add(order);
         return this;
     }
@@ -481,7 +525,7 @@ public class SQLQueryBuilder {
      * @param sqlDialect SQL方言枚举
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder setSqlDialect(SQLDialect sqlDialect) {
+    public SqlQueryBuilder setSqlDialect(SQLDialect sqlDialect) {
         this.sqlDialect = sqlDialect;
         return this;
     }
@@ -493,7 +537,7 @@ public class SQLQueryBuilder {
      * @param tableAlias 表别名
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder tableName(String table, String tableAlias) {
+    public SqlQueryBuilder tableName(String table, String tableAlias) {
         this.table = new QueryTable(table, tableAlias);
         return this;
     }
@@ -505,7 +549,7 @@ public class SQLQueryBuilder {
      * @param tableAlias      表别名
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder tableName(SQLQueryBuilder sqlQueryBuilder, String tableAlias) {
+    public SqlQueryBuilder tableName(SqlQueryBuilder sqlQueryBuilder, String tableAlias) {
         this.table = new QueryTable(sqlQueryBuilder, tableAlias);
         return this;
     }
@@ -516,7 +560,7 @@ public class SQLQueryBuilder {
      * @param table 表名
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder tableName(String table) {
+    public SqlQueryBuilder tableName(String table) {
         this.table = new QueryTable(table);
         return this;
     }
@@ -527,7 +571,7 @@ public class SQLQueryBuilder {
      * @param limit 限制的最大数量
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder limit(Integer limit) {
+    public SqlQueryBuilder limit(Integer limit) {
         return setLimit(limit);
     }
 
@@ -537,7 +581,7 @@ public class SQLQueryBuilder {
      * @param limit 限制的最大数量
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    private SQLQueryBuilder setLimit(Integer limit) {
+    private SqlQueryBuilder setLimit(Integer limit) {
         this.limit = limit;
         return this;
     }
@@ -548,7 +592,7 @@ public class SQLQueryBuilder {
      * @param offset 起始偏移量
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    public SQLQueryBuilder offset(Integer offset) {
+    public SqlQueryBuilder offset(Integer offset) {
         return setOffset(offset);
     }
 
@@ -558,7 +602,7 @@ public class SQLQueryBuilder {
      * @param offset 起始偏移量
      * @return 当前SQLQueryBuilder实例，以支持方法链调用
      */
-    private SQLQueryBuilder setOffset(Integer offset) {
+    private SqlQueryBuilder setOffset(Integer offset) {
         this.offset = offset;
         return this;
     }
@@ -571,10 +615,9 @@ public class SQLQueryBuilder {
     private String getFullTableName(List<Object> dataList) {
         //如果存在子查询，那么直接返回子查询
         if (table != null && table.getSqlQueryBuilder() != null) {
-            QuerySQLResult querySQLResult = table.getSqlQueryBuilder().buildQuerySQLResult();
-            dataList.addAll(querySQLResult.getDataList());
-//            return table.getSqlQueryBuilder().buildSQL();
-            return "(" + querySQLResult.getSql() + ")";
+            QuerySqlResult querySqlResult = table.getSqlQueryBuilder().buildQuerySqlResult();
+            dataList.addAll(querySqlResult.getDataList());
+            return "(" + querySqlResult.getSql() + ")";
         }
         //如果只存在dbName,那么就dbName.table，如果既存在dbName，又存在schemaName，那么就dbName.schemaName.table
         if (StringUtils.isNotBlank(dbName) && StringUtils.isNotBlank(schemaName)) {
@@ -651,12 +694,12 @@ public class SQLQueryBuilder {
         SelectJoinStep<Record> query;
 
 
-        /**
-         * FROM 的位置可以有子嵌套的查询语句，比如getFullTableName。也就是说这里存在params参数无法带出的问题。
+        /*
+          FROM 的位置可以有子嵌套的查询语句，比如getFullTableName。也就是说这里存在params参数无法带出的问题。
          */
         //有一种当不存在selectFields值的时候，并且不存在groups的时候，select *
-        if (selectFields.size() == 0 && groups.size() == 0) {
-            if (StringUtils.isBlank(table.getTableAlias()) || getTableAliasOrName().equals(table.getTable())) {
+        if (selectFields.isEmpty() && groups.isEmpty()) {
+            if (StringUtils.isBlank(table.getTableAlias()) || Objects.equals(getTableAliasOrName(), table.getTable())) {
                 query = create.select().from(DSL.table(getFullTableName(dataList)));
             } else {
                 query = create.select().from(DSL.table(getFullTableName(dataList)).as(getTableAliasOrName()));
@@ -664,7 +707,7 @@ public class SQLQueryBuilder {
         } else {
             if (table == null) {
                 query = (SelectJoinStep<Record>) create.select(selectFields);
-            } else if (StringUtils.isBlank(table.getTableAlias()) || getTableAliasOrName().equals(table.getTable())) {
+            } else if (StringUtils.isBlank(table.getTableAlias()) || Objects.equals(getTableAliasOrName(), table.getTable())) {
                 query = create.select(selectFields).from(DSL.table(getFullTableName(dataList)));
             } else {
                 query = create.select(selectFields).from(DSL.table(getFullTableName(dataList)).as(getTableAliasOrName()));
@@ -672,25 +715,17 @@ public class SQLQueryBuilder {
         }
 
         for (QueryJoin join : joins) {
-            switch (join.getType()) {
-                case JOIN:
-                    query = query.join(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
-                    break;
-                case INNER_JOIN:
-                    query = query.innerJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
-                    break;
-                case LEFT_JOIN:
-                    query = query.leftJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
-                    break;
-                case RIGHT_JOIN:
-                    query = query.rightJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
-                    break;
-                case FULL_OUTER_JOIN:
-                    query = query.fullJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
-                    break;
-                default:
-                    throw new UnsupportedOperationException("不支持的联接类型: " + join.getType());
-            }
+            query = switch (join.getType()) {
+                case JOIN -> query.join(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
+                case INNER_JOIN ->
+                        query.innerJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
+                case LEFT_JOIN ->
+                        query.leftJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
+                case RIGHT_JOIN ->
+                        query.rightJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
+                case FULL_OUTER_JOIN ->
+                        query.fullJoin(join.toTable(create, dataList)).on(DSL.condition(join.getOnCondition()));
+            };
         }
 
         // 处理 conditions
@@ -730,8 +765,12 @@ public class SQLQueryBuilder {
             query.where(whereCondition);
         }
 
-        for (String group : groups) {
-            query.groupBy(DSL.field(DSL.name(getTableAliasOrName(), group).quotedName()));
+        for (QueryGroup group : groups) {
+            if (StringUtils.isNotBlank(group.getTableName())){
+                query.groupBy(DSL.field(DSL.name(group.getTableName(), group.getField()).quotedName()));
+            }else {
+                query.groupBy(DSL.field(DSL.name(getTableAliasOrName(), group.getField()).quotedName()));
+            }
         }
 
         Condition havingCondition = null;
@@ -811,9 +850,9 @@ public class SQLQueryBuilder {
      * @return 生成的SQL字符串
      */
     public String buildSQL() {
-        QuerySQLResult querySQLResult = buildQuerySQLResult();
+        QuerySqlResult querySqlResult = buildQuerySqlResult();
         //query.getParams()的value参数写入Object数字
-        Object[] array = querySQLResult.getDataList().stream().map(
+        Object[] array = querySqlResult.getDataList().stream().map(
                 param -> {
                     //1.如果是数字类型就直接返回
                     //2.如果是字符串类型，
@@ -839,7 +878,7 @@ public class SQLQueryBuilder {
                     return param;
                 }
         ).toArray();
-        return getRealSql(querySQLResult.getSql(), array);
+        return getRealSql(querySqlResult.getSql(), array);
     }
 
     /**
@@ -847,11 +886,11 @@ public class SQLQueryBuilder {
      *
      * @return 生成的占位符的SQL对象
      */
-    public QuerySQLResult buildQuerySQLResult() {
+    public QuerySqlResult buildQuerySqlResult() {
         List<Object> dataList = new ArrayList<>();
         DSLContext create = DSL.using(sqlDialect);
         SelectJoinStep<Record> query = buildQuery(create, dataList);
-        return new QuerySQLResult(query.getSQL(ParamType.INDEXED), dataList);
+        return new QuerySqlResult(query.getSQL(ParamType.INDEXED), dataList);
     }
 
     private String getRealSql(String sql, Object[] data) {
@@ -879,12 +918,12 @@ public class SQLQueryBuilder {
         return realSql.toString();
     }
 
-    public SQLQueryBuilder addHavingConditions(List<QueryCondition> metricConditions) {
+    public SqlQueryBuilder addHavingConditions(List<QueryCondition> metricConditions) {
         this.havingConditions.addAll(metricConditions);
         return this;
     }
 
-    public SQLQueryBuilder addStringHavingCondition(String havingCondition) {
+    public SqlQueryBuilder addStringHavingCondition(String havingCondition) {
         if (StringUtils.isNotBlank(havingCondition)) {
             QueryStringCondition queryCondition = new QueryStringCondition(havingCondition, SQLOperatorEnum.AND);
             this.stringHavingConditions.add(queryCondition);
@@ -892,7 +931,7 @@ public class SQLQueryBuilder {
         return this;
     }
 
-    public SQLQueryBuilder addOrStringHavingCondition(String havingCondition) {
+    public SqlQueryBuilder addOrStringHavingCondition(String havingCondition) {
         if (StringUtils.isNotBlank(havingCondition)) {
             QueryStringCondition queryCondition = new QueryStringCondition(havingCondition, SQLOperatorEnum.OR);
             this.stringHavingConditions.add(queryCondition);
@@ -900,12 +939,12 @@ public class SQLQueryBuilder {
         return this;
     }
 
-    public SQLQueryBuilder dbName(String dbName) {
+    public SqlQueryBuilder dbName(String dbName) {
         this.dbName = dbName;
         return this;
     }
 
-    public SQLQueryBuilder schemaName(String schemaName) {
+    public SqlQueryBuilder schemaName(String schemaName) {
         this.schemaName = schemaName;
         return this;
     }

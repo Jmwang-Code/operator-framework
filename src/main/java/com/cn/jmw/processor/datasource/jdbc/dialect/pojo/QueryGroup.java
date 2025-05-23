@@ -1,6 +1,6 @@
-package cn.jt.bds.framework.processor.datasource.jdbc.dialect.pojo;
+package com.cn.jmw.processor.datasource.jdbc.dialect.pojo;
 
-import cn.jt.bds.framework.processor.datasource.jdbc.dialect.enums.SQLFunctionEnum;
+import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLFunctionEnum;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

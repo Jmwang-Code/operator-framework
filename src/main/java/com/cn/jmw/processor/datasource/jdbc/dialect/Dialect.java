@@ -6,6 +6,8 @@ package com.cn.jmw.processor.datasource.jdbc.dialect;
  * 该接口规定了获取SQL方言SQL查询的标准方法。
  * 实现此接口的类必须提供特定数据库的SQL命令和语法。
  * </p>
+ *
+ * @author Jmwang
  */
 public interface Dialect {
 
@@ -15,5 +17,5 @@ public interface Dialect {
      * @param queryBuilder 要转换为SQL字符串的SQLQueryBuilder实例。
      * @return 返回构建的SQL字符串，符合特定数据库的语法要求。
      */
-    public String buildSQL(SQLQueryBuilder queryBuilder);
+    String buildSql(SqlQueryBuilder queryBuilder);
 }

@@ -6,16 +6,23 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * @author Jmwang
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class QueryStringCondition {
 
+    /**
+     * 参与查询的表名
+     */
     @JsonProperty("condition")
-    // 参与查询的表名
     private String condition;
 
+    /**
+     * 参与查询的字段名
+     */
     @JsonProperty("NestedConditions")
-    // 参与查询的字段名
     private SQLOperatorEnum operator;
 }

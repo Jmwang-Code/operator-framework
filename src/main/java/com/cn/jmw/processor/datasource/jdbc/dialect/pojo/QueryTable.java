@@ -1,23 +1,32 @@
 package com.cn.jmw.processor.datasource.jdbc.dialect.pojo;
 
-import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
+import com.cn.jmw.processor.datasource.jdbc.dialect.SqlQueryBuilder;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * @author Jmwang
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class QueryTable {
 
-    // 表名
+    /**
+     * 表名
+     */
     private String table;
 
-    // 表别名
+    /**
+     * 表别名
+     */
     private String tableAlias;
 
-    // SQL查询构建器
-    private SQLQueryBuilder sqlQueryBuilder;
+    /**
+     * SQL查询构建器
+     */
+    private SqlQueryBuilder sqlQueryBuilder;
 
     /**
      * 构造一个QueryTable实例，使用SQL查询构建器和字段别名。
@@ -25,7 +34,7 @@ public class QueryTable {
      * @param sqlQueryBuilder SQL查询构建器
      * @param tableAlias      字段别名
      */
-    public QueryTable(SQLQueryBuilder sqlQueryBuilder, String tableAlias) {
+    public QueryTable(SqlQueryBuilder sqlQueryBuilder, String tableAlias) {
         this.tableAlias = tableAlias;
         this.sqlQueryBuilder = sqlQueryBuilder;
     }

@@ -1,4 +1,4 @@
-package cn.jt.bds.framework.processor.datasource.jdbc.dialect.enums;
+package com.cn.jmw.processor.datasource.jdbc.dialect.enums;
 
 /**
  * @author Jmwang

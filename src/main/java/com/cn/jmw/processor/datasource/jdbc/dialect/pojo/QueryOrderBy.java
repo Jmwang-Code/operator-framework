@@ -8,12 +8,18 @@ import lombok.Data;
  * <p>
  * 该类包含字段名和排序类型（升序或降序），用于在查询构建过程中指定排序条件。
  * </p>
+ *
+ * @author Jmwang
  */
 @Data
 public class QueryOrderBy {
-    // 排序字段的名称
+    /**
+     * 排序字段的名称
+     */
     private String field;
-    // 排序的方式（如升序、降序）
+    /**
+     * 排序的方式（如升序、降序）
+     */
     private SQLOperatorEnum order;
     private boolean isAlias;
 

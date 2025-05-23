@@ -5,6 +5,8 @@ package com.cn.jmw.processor.datasource.jdbc.dialect.enums;
  * <p>
  * 此枚举提供多种 SQL 操作符，如逻辑操作符、比较操作符及排序操作符，以便在构建 SQL 查询时使用。
  * </p>
+ *
+ * @author Jmwang
  */
 public enum SQLOperatorEnum {
     /**
@@ -74,12 +76,32 @@ public enum SQLOperatorEnum {
     /**
      * LIKE 操作符，用于模糊匹配。
      */
-    LIKE("LIKE", "包含"),
+    LIKE("LIKE", "模式匹配"),
 
     /**
      * NOT LIKE 操作符，用于否定模糊匹配。
      */
-    NOT_LIKE("NOT LIKE", "不包含"),
+    NOT_LIKE("NOT LIKE", "非模式匹配"),
+
+    /**
+     * START WITH 操作符，用于模糊匹配。
+     */
+    START_WITH("LIKE", "以...开头"),
+
+    /**
+     * END WITH 操作符，用于模糊匹配。
+     */
+    END_WITH("LIKE", "以...结尾"),
+
+    /**
+     * 用于模糊匹配的操作符，自动匹配包含指定值的记录。
+     */
+    CONTAINS("LIKE", "包含"),
+
+    /**
+     * 用于否定模糊匹配的操作符，自动匹配不包含指定值的记录。
+     */
+    NOT_CONTAINS("NOT LIKE", "不包含"),
 
     /**
      * IN 操作符，用于在一组值中匹配。

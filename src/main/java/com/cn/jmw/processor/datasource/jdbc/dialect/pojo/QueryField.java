@@ -1,6 +1,5 @@
 package com.cn.jmw.processor.datasource.jdbc.dialect.pojo;
 
-import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
 import com.cn.jmw.processor.datasource.jdbc.dialect.enums.SQLFunctionEnum;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,18 +12,28 @@ import org.jooq.impl.DSL;
  * <p>
  * 此类支持为字段指定别名和函数类型，用于在查询构建过程中提供更多信息。
  * </p>
+ *
+ * @author Jmwang
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class QueryField {
-    // 字段名
+    /**
+     * 字段名
+     */
     private String[] field;
-    // 字段别名
+    /**
+     * 字段别名
+     */
     private String fieldAlias;
-    // 函数类型，可以是Doris支持的任何函数
+    /**
+     * 函数类型，可以是Doris支持的任何函数
+     */
     private SQLFunctionEnum function;
-    // 当前字段的表名
+    /**
+     * 当前字段的表名
+     */
     private String tableName;
 
     /**
@@ -80,14 +89,18 @@ public class QueryField {
     public Field<?> toField(String tableAlias) {
         String qualifiedField;
         if (tableAlias != null && !tableAlias.isEmpty()) {
-            qualifiedField = "`" + tableAlias + "`.`" + field[0] + "`"; // 使用表别名构建合格字段
+            // 使用表别名构建合格字段
+            qualifiedField = "`" + tableAlias + "`.`" + field[0] + "`";
         } else {
-            qualifiedField = "`" + field[0] + "`"; // 仅使用字段名
+            // 仅使用字段名
+            qualifiedField = "`" + field[0] + "`";
         }
         if (fieldAlias != null && !fieldAlias.isEmpty()) {
-            return DSL.field(qualifiedField).as(fieldAlias); // 返回带别名的字段
+            // 返回带别名的字段
+            return DSL.field(qualifiedField).as(fieldAlias);
         } else {
-            return DSL.field(qualifiedField); // 返回无别名的字段
+            // 返回无别名的字段
+            return DSL.field(qualifiedField);
         }
     }
 
