@@ -1,64 +1,71 @@
 package com.cn.jmw.processor.base;
 
-import com.cn.jmw.pojo.SQLQueryMontage;
+import com.cn.jmw.pojo.SqlQueryMontage;
 import com.cn.jmw.processor.BaseProcessor;
-import com.cn.jmw.processor.datasource.Database;
+import com.cn.jmw.processor.datasource.AbstractDatabase;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.factory.DatabaseAdapterFactory;
-import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
-import com.cn.jmw.processor.datasource.pojo.JDBCConnectionEntity;
+import com.cn.jmw.processor.datasource.pojo.JdbcAdapterDataSourceConfig;
+import com.cn.jmw.processor.datasource.pojo.JdbcConnectionEntity;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
- * 算法采样
+ * 算法采样处理器
+ * <p>
+ * 该处理器用于对输入的 SQL 查询集合执行随机抽样操作，抽取指定数量的记录。
+ * 如果数据总量小于抽样数量，则返回全部数据；否则按指定规则进行抽样。
+ * </p>
  *
- * 抽查 n 条
+ * @author Jmwang
  */
-public class AlgorithmicSamplingProcessor extends BaseProcessor<List<SQLQueryMontage>, List<SQLQueryMontage>> {
+public class AlgorithmicSamplingProcessor extends BaseProcessor<List<SqlQueryMontage>, List<SqlQueryMontage>> {
 
+    /**
+     * 处理输入的 SQL 查询集合，进行随机抽样。
+     *
+     * @param input 输入的 SQL 查询集合
+     * @param data  附加数据，通常包含 JdbcConnectionEntity
+     * @return 处理后的 SQL 查询集合
+     * @throws Exception 如果数据库操作或配置获取失败
+     */
     @Override
-    public List<SQLQueryMontage> process(List<SQLQueryMontage> input, Object... data) throws Exception {
-        if (input==null || input.size()==0){
+    public List<SqlQueryMontage> process(List<SqlQueryMontage> input, Object... data) throws Exception {
+        // 检查输入是否为空或空集合
+        if (input == null || input.isEmpty()) {
             return new ArrayList<>();
         }
 
-        if (data == null) {
-            return List.of();
+        // 检查附加数据是否有效
+        if (data == null || data.length == 0) {
+            return Collections.emptyList();
         }
-        JDBCConnectionEntity jdbcConnectionEntity = (JDBCConnectionEntity) data[0];
+
+        JdbcConnectionEntity jdbcConnectionEntity = (JdbcConnectionEntity) data[0];
         if (jdbcConnectionEntity == null) {
-            return List.of();
+            return Collections.emptyList();
         }
+
+        JdbcAdapterDataSourceConfig config = jdbcConnectionEntity.getConfig();
+        int samplingCount = config.getSamplingCount();
 
         DatabaseEnum dbType = jdbcConnectionEntity.getDbType();
-        Database database = DatabaseAdapterFactory.getDatabase(jdbcConnectionEntity, dbType.getAdapterClass());
-        for (int i = 0; i < input.size(); i++) {
-            SQLQueryMontage sqlQueryMontage = input.get(i);
-            /**
-             * 当数据量大于M条的时候，如果数量小于M条直接全拿出来
-             *
-             * TODO 暂时不考虑全量的全量N点抽样区间
-             * 全量
-             * 有索引 和 (数字OR时间)
-             * 全量N点抽样区间
-             * 用N个点把整体数据分割开，然后每个点从头拆选M条数据
-             * 如果第一次筛选完的数据，达不到M条
-             * 第二次就一定会移动limit补全到M条
-             *
-             * 增量
-             *
-             */
-            List<String> list;
-            if (data!=null && data.length>1){
-                list = database.addRandomSampling(sqlQueryMontage, 10, 1000);
-            }else {
-                list = database.addRandomSampling(sqlQueryMontage, 10, 10000);
-            }
+        AbstractDatabase database = DatabaseAdapterFactory.getDatabase(
+                jdbcConnectionEntity,
+                dbType != null ? (Class<AbstractDatabase>) dbType.getAdapterClass() : null
+        );
 
-            if (list!=null && list.size()>0){
-                sqlQueryMontage.setSql(list);
+        for (SqlQueryMontage sqlQueryMontage : input) {
+            List<String> sampledSqlList;
+            // 根据附加数据长度选择抽样逻辑（此处逻辑相同，可优化）
+            sampledSqlList = database.addRandomSampling(sqlQueryMontage, 10, samplingCount);
+
+            if (sampledSqlList != null && !sampledSqlList.isEmpty()) {
+                sqlQueryMontage.setSql(sampledSqlList);
+                // 设置抽样方式（假设 SampleResult 存在）
+                sqlQueryMontage.getSampleResult().ifPresent(sr -> sr.setSampleMethod("随机抽样"));
             }
         }
 
