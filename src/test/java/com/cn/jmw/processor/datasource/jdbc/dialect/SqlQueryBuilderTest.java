@@ -130,13 +130,13 @@ public class SqlQueryBuilderTest {
                 .limit(100)
                 .offset(10);
 
-        String jsonString = DorisJdbcAdapter.objectMapper.writeValueAsString(queryBuilderX);
+        String jsonString = DorisJdbcAdapter.OBJECT_MAPPER.writeValueAsString(queryBuilderX);
 
         // 最后，调用 buildSQL 方法来生成 SQL 语句
         long l = System.currentTimeMillis();
 //        System.out.println("执行耗时：" + (System.currentTimeMillis() - l) + "ms");
         System.out.println(queryBuilderX.buildSQL());
-        System.out.println(queryBuilderX.buildQuerySQLResult());
+        System.out.println(queryBuilderX.buildQuerySqlResult());
     }
 
     @Test
@@ -295,7 +295,7 @@ public class SqlQueryBuilderTest {
                 .tableName("bds_asset_info")
                 .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "'admin'; DROP TABLE users; --");
         System.out.println(SqlQueryBuilder.buildSQL());
-        System.out.println(SqlQueryBuilder.buildQuerySQLResult());
+        System.out.println(SqlQueryBuilder.buildQuerySqlResult());
         //select * from `bds_asset_info` where `asset_category` = "'admin' OR 1=1"
         //成功防止sql注入
     }
@@ -307,7 +307,7 @@ public class SqlQueryBuilderTest {
                 .tableName("bds_asset_info")
                 .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT 1/0; --");
         System.out.println(SqlQueryBuilder.buildSQL());
-        System.out.println(SqlQueryBuilder.buildQuerySQLResult());
+        System.out.println(SqlQueryBuilder.buildQuerySqlResult());
         //select * from `bds_asset_info` where `asset_category` = "''; SELECT 1/0; --"
         //成功防止sql注入
     }
@@ -319,7 +319,7 @@ public class SqlQueryBuilderTest {
                 .tableName("bds_asset_info")
                 .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT * FROM bds_asset_info; --");
         System.out.println(SqlQueryBuilder.buildSQL());
-        System.out.println(SqlQueryBuilder.buildQuerySQLResult());
+        System.out.println(SqlQueryBuilder.buildQuerySqlResult());
         //select * from `bds_asset_info` where `asset_category` = "''; SELECT * FROM bds_asset_info; --"
         //成功防止sql注入
     }
@@ -331,7 +331,7 @@ public class SqlQueryBuilderTest {
                 .tableName("bds_asset_info")
                 .addOrCondition("asset_category", SQLOperatorEnum.EQUAL, "''; SELECT CONVERT(1, INT); --");
         System.out.println(SqlQueryBuilder.buildSQL());
-        System.out.println(SqlQueryBuilder.buildQuerySQLResult());
+        System.out.println(SqlQueryBuilder.buildQuerySqlResult());
         //select * from `bds_asset_info` where `asset_category` = "''; SELECT CONVERT(1, INT); --"
         //成功防止sql注入
     }
@@ -344,7 +344,7 @@ public class SqlQueryBuilderTest {
                 .addAndCondition("asset_category", SQLOperatorEnum.IS_NOT_NULL);
 
         System.out.println(SqlQueryBuilder.buildSQL());
-        System.out.println(SqlQueryBuilder.buildQuerySQLResult());
+        System.out.println(SqlQueryBuilder.buildQuerySqlResult());
         //select * from `bds_asset_info` where `asset_category` = "''; CALL sp_test(); --"
         //成功防止sql注入
     }
@@ -380,7 +380,7 @@ public class SqlQueryBuilderTest {
                 .addCondition(queryCondition);
 
         System.out.println(queryBuilder.buildSQL());
-        System.out.println(queryBuilder.buildQuerySQLResult());
+        System.out.println(queryBuilder.buildQuerySqlResult());
         assertEquals(null, queryBuilder.buildSQL());
     }
 
@@ -409,7 +409,7 @@ public class SqlQueryBuilderTest {
                 .addCondition(queryCondition);
 
         System.out.println(queryBuilder.buildSQL());
-        System.out.println(queryBuilder.buildQuerySQLResult());
+        System.out.println(queryBuilder.buildQuerySqlResult());
 
 
 //        SqlQueryBuilder queryBuilder1 = new SqlQueryBuilder()
@@ -425,7 +425,7 @@ public class SqlQueryBuilderTest {
 //                );
 //
 //        System.out.println(queryBuilder1.buildSQL());
-//        System.out.println(queryBuilder1.buildQuerySQLResult());
+//        System.out.println(queryBuilder1.buildQuerySqlResult());
 
     }
 
@@ -444,7 +444,7 @@ public class SqlQueryBuilderTest {
 
 
         System.out.println(SqlQueryBuilder.buildSQL());
-        System.out.println(SqlQueryBuilder.buildQuerySQLResult());
+        System.out.println(SqlQueryBuilder.buildQuerySqlResult());
 
     }
 
@@ -473,7 +473,7 @@ public class SqlQueryBuilderTest {
 
         System.out.println(SqlQueryBuilder.buildSQL());
 
-        System.out.println(SqlQueryBuilder.buildQuerySQLResult());
+        System.out.println(SqlQueryBuilder.buildQuerySqlResult());
 
     }
 

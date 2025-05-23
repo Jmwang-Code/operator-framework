@@ -31,18 +31,18 @@ public class ASynExportTest {
 
     @Test
     public void queryASynExportJobStatus() {
-        ShowExport showExport = adapter.queryASynExportJobStatus("bds_log", label);
+        ShowExport showExport = adapter.queryAsynExportJobStatus("bds_log", label);
         System.out.println(showExport);
     }
 
     @Test
     public void testQueryASynExportJobStatus() {
-        List<ShowExport> showExports = adapter.queryASynExportJobStatus("bds_log");
+        List<ShowExport> showExports = adapter.queryAsynExportJobStatus("bds_log");
         System.out.println(showExports);
     }
 
     @Test
     public void stopASynExportJob() {
-        adapter.stopASynExportJob(label);
+        adapter.stopAsynExportJob(label);
     }
 }
