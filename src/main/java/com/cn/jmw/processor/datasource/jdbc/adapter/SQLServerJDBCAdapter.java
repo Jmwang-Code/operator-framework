@@ -1,15 +1,17 @@
 package com.cn.jmw.processor.datasource.jdbc.adapter;
 
-import com.cn.jmw.pojo.SQLQueryMontage;
+import com.cn.jmw.pojo.SqlQueryMontage;
 import com.cn.jmw.pojo.SampleResult;
-import com.cn.jmw.processor.datasource.JDBCAdapter;
+import com.cn.jmw.processor.datasource.AbstractJdbcAdapter;
+import com.cn.jmw.processor.datasource.ConnectionStringStrategy;
+import com.cn.jmw.processor.datasource.GeneratedConnectionStringStrategy;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
-import com.cn.jmw.processor.datasource.jdbc.dialect.SQLQueryBuilder;
+import com.cn.jmw.processor.datasource.jdbc.dialect.SqlQueryBuilder;
 import com.cn.jmw.processor.datasource.pojo.ColumnEntity;
 import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
-import com.cn.jmw.processor.datasource.pojo.JDBCAdapterDataSourceConfig;
+import com.cn.jmw.processor.datasource.pojo.JdbcAdapterDataSourceConfig;
 import com.cn.jmw.processor.datasource.pojo.TableEntity;
-import org.apache.arrow.adbc.core.AdbcException;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 
 import java.sql.*;
@@ -24,29 +26,49 @@ import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
  * <p>
  * 该类扩展了JDBCAdapter，提供了与SQL Server相关的数据库操作。
  * </p>
+ *
+ * @author Jmwang
  */
-public class SQLServerJDBCAdapter extends JDBCAdapter {
+@Slf4j
+public class SqlServerJdbcAdapter extends AbstractJdbcAdapter {
+
     /**
-     * 构造函数用于创建SQLServerJDBCAdapter实例。
+     * 构造函数，初始化适配器实例。
      *
-     * @param hostname     SQL Server服务器的主机名
-     * @param port         SQL Server服务器的端口号
-     * @param databaseName 数据库名称
-     * @param username     用户名
-     * @param password     密码
+     * @param hostname       主机名
+     * @param port           端口号
+     * @param databaseName   数据库名称
+     * @param username       用户名
+     * @param password       密码
+     * @param config         数据源配置
+     * @param connectionUser 连接用户
+     * @param test           是否为测试模式
      */
-    public SQLServerJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password, JDBCAdapterDataSourceConfig config, String connectionUser) {
-        super(hostname, port, databaseName, username, password,config,connectionUser);
+    public SqlServerJdbcAdapter(String hostname, Integer port, String databaseName, String username, String password, JdbcAdapterDataSourceConfig config, String connectionUser, Boolean test, ConnectionStringStrategy strategy) {
+        super(hostname, port, databaseName, username, password,config,connectionUser,test,strategy);
     }
 
-    public SQLServerJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password,JDBCAdapterDataSourceConfig config) {
-        this(hostname, port, databaseName, username, password, config, null);
+    public SqlServerJdbcAdapter(String hostname, Integer port, String databaseName, String username, String password, JdbcAdapterDataSourceConfig config, Boolean test, ConnectionStringStrategy strategy) {
+        this(hostname, port, databaseName, username, password, config, null, test, strategy);
     }
 
-    public SQLServerJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password)  {
-        this(hostname, port, databaseName, username, password, new JDBCAdapterDataSourceConfig(), null);
-    }
+//    public SqlServerJdbcAdapter(String hostname, Integer port, String databaseName, String username, String password, JdbcAdapterDataSourceConfig config, Boolean test) {
+//        this(hostname, port, databaseName, username, password, config, null,test, new GeneratedConnectionStringStrategy(null));
+//    }
+//
+//    public SqlServerJdbcAdapter(String hostname, Integer port, String databaseName, String username, String password, Boolean test)  {
+//        this(hostname, port, databaseName, username, password, new JdbcAdapterDataSourceConfig(), null,test, new GeneratedConnectionStringStrategy(null));
+//    }
 
+    /**
+     * 获取Aliyun RDS的连接字符串。
+     *
+     * @return 返回连接字符串，包含连接所需的参数
+     */
+    @Override
+    public String getConnectionString() {
+        return connectionStringStrategy.getConnectionString(hostname, port, databaseName, config);
+    }
 
     /**
      * 获取SQL Server的连接字符串。
@@ -54,7 +76,7 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
      * @return 返回连接字符串，包含连接所需的参数
      */
     @Override
-    public String getConnectionString() {
+    public String generateConnectionString() {
         return "jdbc:sqlserver://" + super.hostname + ":" + super.port + ";" +
                 "database=" + super.databaseName + ";" +
                 "Encrypt=true;trustServerCertificate=true;loginTimeout=30;";
@@ -79,49 +101,43 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
     public List<String> getIgnoreDatabaseList() {
         return Arrays.asList("msdb","compute_node","DWConfiguration","DWDiagnostics","DWQueue","tempdb","model");
     }
+
     /**
      * 添加随机采样
-     * <h1>不允许出现 ORDER BY、 LIMIT等字眼</h1>
+     * <h1>不允许出现 ORDER BY、LIMIT等字眼</h1>
      *
-     * @param sqlQueryMontage
-     * @return 增加随机抽样后的SQL
+     * @param sqlQueryMontage SQL 查询的封装对象
+     * @param n               抽样的数量
+     * @param m               限制的数量
+     * @return 增加随机抽样后的SQL列表
      */
     @Override
-    public List<String> addRandomSampling(SQLQueryMontage sqlQueryMontage, int N, int M){
-        //抽样样本结果
-        SampleResult sampleResult = sqlQueryMontage.getSampleResult();
-        sampleResult.setSample_result("增量");
+    public List<String> addRandomSampling(SqlQueryMontage sqlQueryMontage, int n, int m){
+        // 获取 Optional<SampleResult>
+        Optional<SampleResult> optionalSampleResult = sqlQueryMontage.getSampleResult();
+
+        // 如果 sampleResult 存在，则设置抽样方式为 "增量"
+        optionalSampleResult.ifPresent(sampleResult -> sampleResult.setSampleMethod("增量"));
+
+        // 初始化返回结果
         List<String> list = new ArrayList<>();
-        SQLQueryBuilder sqlQueryBuilder = sqlQueryMontage.getSqlQueryBuilders().get(0);
-        if (sqlQueryBuilder==null) {
+
+        // 获取 SQL 构建器
+        SqlQueryBuilder sqlQueryBuilder = sqlQueryMontage.getSqlQueryBuilders().getFirst();
+        if (sqlQueryBuilder == null) {
             throw exception(RANDOM_SAMPLING_ERROR);
         }
+
+        // 构建原始 SQL
         String sql = sqlQueryBuilder.buildSQL().replaceAll("`","").replaceAll("[()]","");
         sql = simplifySql(sql);
         if (StringUtils.isBlank(sql)){
             throw exception(RANDOM_SAMPLING_ERROR);
         }
-        Matcher matcher = RandomSamplingCompile.matcher(sql);
+        Matcher matcher = RANDOM_SAMPLING_COMPILE.matcher(sql);
         if (matcher.find()){
             throw exception(RANDOM_SAMPLING_NOT_ALLOW_KEYWORD);
         }
-
-        //获取COUNT总量
-        //sql替换FROM之前的变成SELECT COUNT(1)
-        String countSql = sql
-                .replaceAll("(?i)SELECT\\s+.*?\\s+FROM", "SELECT COUNT(1) FROM")
-                .replaceAll("(?i)ORDER\\s+BY\\s+.*$", "");
-        //执行COUNT
-        List<Map<String, Object>> countResult = null;
-        try {
-            countResult = executeDMLC(countSql, null);
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return null;
-        }
-        long totalCount = countResult.isEmpty() ? 0 : (Integer) countResult.get(0).get("1");
-        //totalCount和(N*M*2)的百分比
-        double percent = totalCount<(N * M * 2)?1.0:(N * M * 2) * 1.0 / totalCount;
 
         sql = sql.replaceAll("select","select TOP 10000");
 
@@ -137,8 +153,9 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
     @Override
     public List<DatabaseEntity> getDatabaseMetadata(String dbName) {
         List<DatabaseEntity> databaseEntities = new ArrayList<>();
-        List<String> ignoreDatabases = getIgnoreDatabaseList(); // 获取需要忽略的数据库列表
-        try (Connection connection = pool.getConnection(hostname + port + databaseName,config,connectionUser)) {
+        // 获取需要忽略的数据库列表
+        List<String> ignoreDatabases = getIgnoreDatabaseList();
+        try (Connection connection = pool.getConnection(hostname + port + databaseName + username + password,config,connectionUser)) {
             DatabaseMetaData metaData = connection.getMetaData();
             try (ResultSet catalogs = metaData.getCatalogs()) {
                 while (catalogs.next()) {
@@ -153,15 +170,15 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
                     DatabaseEntity databaseEntity = new DatabaseEntity();
                     databaseEntity.setDatabaseName(databaseName);
                     databaseEntity.setDatabaseEnum(getDatabaseType());
-                    Map<String, TableEntity> tableEntities = new HashMap<>();
+                    Map<String, TableEntity> tableEntities = new HashMap<>(16);
                     try (ResultSet tables = metaData.getTables(databaseName, null, "%", new String[]{"TABLE"})) {
                         while (tables.next()) {
                             String tableName = tables.getString("TABLE_NAME");
                             TableEntity tableEntity = new TableEntity();
                             tableEntity.setTableName(tableName);
 
-                            /**
-                             * 表注释
+                            /*
+                              表注释
                              */
                             String tableCommentSQL = "SELECT t.name AS 'tableName', CAST(p.value AS nvarchar(MAX)) AS 'tableComment'\n" +
                                     "FROM "+databaseName+".sys.tables t\n" +
@@ -171,13 +188,13 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
 
                             List<Map<String, Object>> tableCommentResult = executeDMLC(tableCommentSQL, null);
                             if (tableCommentResult!=null && !tableCommentResult.isEmpty()) {
-                                String tableComment = (String) tableCommentResult.get(0).get("tableComment");
+                                String tableComment = (String) tableCommentResult.getFirst().get("tableComment");
                                 // 获取表注释
-                                tableEntity.setTableComment(tableComment); // 获取表注释
+                                tableEntity.setTableComment(tableComment);
                             }
 
-                            /**
-                             * 字段注释
+                            /*
+                              字段注释
                              */
                             String columnCommentSQL = "SELECT c.name AS 'columnName',ex.value AS 'columnComment'\n" +
                                     "FROM "+databaseName+".sys.sysobjects t\n" +
@@ -186,32 +203,38 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
                                     "WHERE t.name = '"+tableName+"'\n";
 
                             List<Map<String, Object>> columnCommentResult = executeDMLC(columnCommentSQL, null);
-                            Map<String, String> columnCommentsMap = new HashMap<>();
+                            Map<String, String> columnCommentsMap = new HashMap<>(16);
                             for (Map<String, Object> result : columnCommentResult) {
                                 String columnComment = (String) result.get("columnComment");
                                 String columnName =  (String) result.get("columnName");
                                 columnCommentsMap.put(columnName, columnComment);
                             }
 
-                            /**
-                             * TODO 查索引
+                            /*
+                              TODO 查索引
                              */
                             Map<String, Map<String, Object>> indexInfo = getIndexInfo(connection,databaseName, tableName);
 
-                            Map<String, ColumnEntity> columnEntities = new HashMap<>();
+                            Map<String, ColumnEntity> columnEntities = new HashMap<>(16);
                             try (ResultSet cols = metaData.getColumns(databaseName, null, tableName, "%")) {
                                 while (cols.next()) {
                                     ColumnEntity columnEntity = new ColumnEntity();
-                                    columnEntity.setColumnName(cols.getString("COLUMN_NAME")); // 获取列名
-                                    columnEntity.setColumnType(cols.getString("TYPE_NAME")); // 获取列类型
-                                    columnEntity.setColumnSize(cols.getInt("COLUMN_SIZE")); // 获取列大小
-                                    columnEntity.setNullable(cols.getInt("NULLABLE") == DatabaseMetaData.columnNullable); // 获取可否为NULL
-                                    columnEntity.setDefaultValue(cols.getString("COLUMN_DEF")); // 获取默认值
-                                    columnEntity.setAutoIncrement("YES".equals(cols.getString("IS_AUTOINCREMENT")) ? 1 : 0); // 获取自增状态
+                                    // 获取列名
+                                    columnEntity.setColumnName(cols.getString("COLUMN_NAME"));
+                                    // 获取列类型
+                                    columnEntity.setColumnType(cols.getString("TYPE_NAME"));
+                                    // 获取列大小
+                                    columnEntity.setColumnSize(cols.getInt("COLUMN_SIZE"));
+                                    // 获取可否为NULL
+                                    columnEntity.setNullable(cols.getInt("NULLABLE") == DatabaseMetaData.columnNullable);
+                                    // 获取默认值
+                                    columnEntity.setDefaultValue(cols.getString("COLUMN_DEF"));
+                                    // 获取自增状态
+                                    columnEntity.setAutoIncrement("YES".equals(cols.getString("IS_AUTOINCREMENT")) ? 1 : 0);
 
-                                    if (columnCommentResult!=null && !columnCommentResult.isEmpty()) {
+                                    if (!columnCommentResult.isEmpty()) {
                                         // 获取字段注释
-                                        columnEntity.setColumnComment(columnCommentsMap.get(cols.getString("COLUMN_NAME"))); // 获取字段注释
+                                        columnEntity.setColumnComment(columnCommentsMap.get(cols.getString("COLUMN_NAME")));
                                     }
 
                                     //TODO 是否是索引
@@ -219,7 +242,8 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
                                         columnEntity.setIsIndex(1);
                                         Map<String, Object> indexDetails = indexInfo.get(columnEntity.getColumnName());
                                         if ("1".equals(indexDetails.get("IS_PRIMARY_KEY"))) {
-                                            columnEntity.setIsPrimaryKey(1); // 设置为主键
+                                            // 设置为主键
+                                            columnEntity.setIsPrimaryKey(1);
                                         }
 
                                         if ("Y".equals(indexDetails.get("IS_AUTOINCREMENT"))){
@@ -230,19 +254,21 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
                                     columnEntities.put(columnEntity.getColumnName(), columnEntity);
                                 }
                             }
-                            tableEntity.setColumns(columnEntities); // 设置表的列信息
+                            // 设置表的列信息
+                            tableEntity.setColumns(columnEntities);
                             tableEntities.put(tableName, tableEntity);
                         }
                     }
-                    databaseEntity.setTables(tableEntities); // 设置数据库中的表信息
+                    // 设置数据库中的表信息
+                    databaseEntity.setTables(tableEntities);
                     databaseEntities.add(databaseEntity);
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
-            throw exception(UNABLE_TO_RETRIEVE_DATABASE_METADATA); // 抛出无法检索数据库元数据的异常
+            log.error("获取总记录数失败: {}", e.getMessage(), e);
+            throw exception(UNABLE_TO_RETRIEVE_DATABASE_METADATA);
         }
-        return databaseEntities; // 返回数据库实体列表
+        return databaseEntities;
     }
 
     /**
@@ -254,7 +280,7 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
      */
     @Override
     public Map<String, Map<String, Object>> getIndexInfo(Connection connection,String dbName, String tableName) {
-        Map<String, Map<String, Object>> hashMap = new HashMap<>();
+        Map<String, Map<String, Object>> hashMap = new HashMap<>(16);
         String indexSQL = "SELECT\n" +
                 "    i.name AS 'INDEX_NAME',\n" +
                 "    c.name AS 'COLUMN_NAME',\n" +
@@ -271,22 +297,19 @@ public class SQLServerJDBCAdapter extends JDBCAdapter {
                 "WHERE\n" +
                 "    DB_NAME() = '"+dbName+"'\n" +
                 "    AND t.name = '"+tableName+"'";
-                try ( PreparedStatement statement = connection.prepareStatement(indexSQL, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+        try ( PreparedStatement statement = connection.prepareStatement(indexSQL, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
             ResultSet resultSet = statement.executeQuery();
             while (resultSet.next()) {
-                Map<String, Object> map = new HashMap<>();
+                Map<String, Object> map = new HashMap<>(16);
                 String COLUMN_NAME = resultSet.getString("COLUMN_NAME");
                 map.put("INDEX_NAME", resultSet.getString("INDEX_NAME"));
                 map.put("IS_PRIMARY_KEY", resultSet.getString("IS_PRIMARY_KEY"));
                 map.put("COLUMN_NAME", COLUMN_NAME);
                 map.put("IS_AUTOINCREMENT", resultSet.getString("IS_AUTOINCREMENT"));
-                if (map.size() == 0) {
-                    continue;
-                }
                 hashMap.put(COLUMN_NAME, map);
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error("获取索引信息失败", e);
             throw exception(INDEX_INFO_GET_ERROR);
         }
         return hashMap;
