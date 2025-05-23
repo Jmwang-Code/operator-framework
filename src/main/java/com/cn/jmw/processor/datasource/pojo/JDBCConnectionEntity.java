@@ -1,8 +1,7 @@
 package com.cn.jmw.processor.datasource.pojo;
 
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
-import com.cn.jmw.processor.datasource.nosql.query.NoSQLQuery;
-import com.zaxxer.hikari.HikariConfig;
+import com.cn.jmw.processor.datasource.nosql.query.NoSqlQuery;
 import lombok.*;
 
 /**
@@ -10,16 +9,23 @@ import lombok.*;
  * <p>
  * 该类包含关于数据库连接的信息，如数据库类型、连接IP、端口号、数据库名称、用户名、密码、SQL语句及相关参数等。
  * </p>
+ *
+ * @author Jmwang
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString(callSuper = true)
-public class  JDBCConnectionEntity {
+public class JdbcConnectionEntity {
     /**
      * 数据库类型的枚举值，例如：1表示MySQL。
      */
     private DatabaseEnum dbType;
+
+    /**
+     * JDBC连接字符串，例如：1表示jdbc:mysql://127.0.0.1:3306/bds-cloud。
+     */
+    private String url;
 
     /**
      * 数据库连接信息，比如：1表示127.0.0.1。
@@ -84,12 +90,12 @@ public class  JDBCConnectionEntity {
     /**
      * 关联的NoSQL查询对象。
      */
-    private NoSQLQuery noSQLQuery;
+    private NoSqlQuery noSqlQuery;
 
     /**
      * 资产状态，表示当前资产的状态。
      */
-    private short AssetStatus;
+    private short assetStatus;
 
     /**
      * 清理阈值
@@ -106,45 +112,80 @@ public class  JDBCConnectionEntity {
      * @param username    数据库用户名
      * @param password    数据库密码
      */
-    public JDBCConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password) {
-        this.dbType = dbType; // 初始化数据库类型
-        this.assetIp = assetIp; // 初始化连接IP
-        this.port = port; // 初始化端口
-        this.dbName = dbName; // 初始化数据库名称
-        this.username = username; // 初始化用户名
-        this.password = password; // 初始化密码
+    public JdbcConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password) {
+        this.dbType = dbType;
+        this.assetIp = assetIp;
+        this.port = port;
+        this.dbName = dbName;
+        this.username = username;
+        this.password = password;
     }
 
-    public JDBCConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password,JDBCAdapterDataSourceConfig config) {
-        this.dbType = dbType; // 初始化数据库类型
-        this.assetIp = assetIp; // 初始化连接IP
-        this.port = port; // 初始化端口
-        this.dbName = dbName; // 初始化数据库名称
-        this.username = username; // 初始化用户名
-        this.password = password; // 初始化密码
-        this.config = config; // 初始化最大活跃连接数
+    public JdbcConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password,String url) {
+        this.dbType = dbType;
+        this.assetIp = assetIp;
+        this.port = port;
+        this.dbName = dbName;
+        this.username = username;
+        this.password = password;
+        this.url = url;
     }
 
-    public JDBCConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password,JDBCAdapterDataSourceConfig config,String connectionUser) {
-        this.dbType = dbType; // 初始化数据库类型
-        this.assetIp = assetIp; // 初始化连接IP
-        this.port = port; // 初始化端口
-        this.dbName = dbName; // 初始化数据库名称
-        this.username = username; // 初始化用户名
-        this.password = password; // 初始化密码
-        this.config = config; // 初始化最大活跃连接数
-        this.connectionUser = connectionUser; // 连接使用者（模块）
+    public JdbcConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password, com.cn.jmw.processor.datasource.pojo.JdbcAdapterDataSourceConfig config) {
+        this.dbType = dbType;
+        this.assetIp = assetIp;
+        this.port = port;
+        this.dbName = dbName;
+        this.username = username;
+        this.password = password;
+        this.config = config;
     }
 
-    // 数据库驱动类名
+    public JdbcConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password, com.cn.jmw.processor.datasource.pojo.JdbcAdapterDataSourceConfig config, String connectionUser) {
+        this.dbType = dbType;
+        this.assetIp = assetIp;
+        this.port = port;
+        this.dbName = dbName;
+        this.username = username;
+        this.password = password;
+        this.config = config;
+        this.connectionUser = connectionUser;
+    }
+
+    public JdbcConnectionEntity(DatabaseEnum dbType, String assetIp, Integer port, String dbName, String username, String password, com.cn.jmw.processor.datasource.pojo.JdbcAdapterDataSourceConfig config, String connectionUser, String url) {
+        this.dbType = dbType;
+        this.assetIp = assetIp;
+        this.port = port;
+        this.dbName = dbName;
+        this.username = username;
+        this.password = password;
+        this.config = config;
+        this.connectionUser = connectionUser;
+        this.url = url;
+    }
+
+    /**
+     * 数据库驱动类名
+     */
     private String driverClassName;
 
-    // JDBC连接字符串
+    /**
+     * JDBC连接字符串
+     */
     private String jdbcString;
 
-    // 最大活动连接数
-    private JDBCAdapterDataSourceConfig config;
+    /**
+     * 最大活跃连接数
+     */
+    private com.cn.jmw.processor.datasource.pojo.JdbcAdapterDataSourceConfig config = new com.cn.jmw.processor.datasource.pojo.JdbcAdapterDataSourceConfig();
 
-   // 连接使用者（模块）
+    /**
+     * 连接使用者（模块）
+     */
     private String connectionUser;
+
+    /**
+     * 测试连接
+     */
+    private boolean test = false;
 }

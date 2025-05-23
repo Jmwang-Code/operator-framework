@@ -9,11 +9,17 @@ import lombok.NoArgsConstructor;
  * <p>
  * 该类包含列名和列类型的基本信息。
  * </p>
+ *
+ * @author Jmwang
  */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 public class ColumnEntity {
+    /**
+     * 列ID（可能存在）
+     */
+    private String columnId;
     /**
      * 列名。
      */
@@ -53,5 +59,9 @@ public class ColumnEntity {
     /**
      * 0时间类型  1字符串类型 2数字类型 3未知格式
      */
-    private int Type;
+    private int type;
+    /**
+     * 当前分类的级别
+     */
+    private Integer level;
 }

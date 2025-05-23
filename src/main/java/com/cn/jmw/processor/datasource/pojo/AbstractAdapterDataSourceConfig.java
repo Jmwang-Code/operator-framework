@@ -1,4 +1,4 @@
-package cn.jt.bds.framework.processor.datasource.pojo;
+package com.cn.jmw.processor.datasource.pojo;
 
 /**
  * @author Jmwang

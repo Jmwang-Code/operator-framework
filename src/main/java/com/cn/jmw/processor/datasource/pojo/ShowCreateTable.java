@@ -5,6 +5,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * @author Jmwang
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -13,5 +16,5 @@ public class ShowCreateTable {
 
     private String table;
 
-    private String create_table;
+    private String createTable;
 }

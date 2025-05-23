@@ -5,15 +5,18 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * @author Jmwang
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class IntoOutFile {
 
-    private Integer FileNumber;
-    private Integer TotalRows;
-    private Long FileSize;
-    private String URL;
+    private Integer fileNumber;
+    private Integer totalRows;
+    private Long fileSize;
+    private String url;
     private String errorMsg;
 }
