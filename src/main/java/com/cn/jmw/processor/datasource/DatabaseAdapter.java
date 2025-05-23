@@ -7,6 +7,8 @@ import java.util.List;
 /**
  * DatabaseAdapter接口用于定义与数据库相关的操作。
  * 该接口提供与数据库连接、元数据检索和数据库信息获取的方法。
+ *
+ * @author Jmwang
  */
 public interface DatabaseAdapter {
     /**
@@ -47,6 +49,7 @@ public interface DatabaseAdapter {
     /**
      * 获取数据库的元数据。
      *
+     * @param dbName 数据库名称
      * @return 数据库实体列表，包含数据库中的表信息
      */
     List<DatabaseEntity> getDatabaseMetadata(String dbName);

@@ -1,14 +1,16 @@
 package com.cn.jmw.processor.datasource;
 
-import com.cn.jmw.processor.datasource.pojo.JDBCAdapterDataSourceConfig;
-import com.zaxxer.hikari.HikariConfig;
+import com.cn.jmw.processor.datasource.pojo.JdbcAdapterDataSourceConfig;
 
-public abstract class JDBCDataSourceConfig extends Database{
+/**
+ * @author Jmwang
+ */
+public abstract class AbstractJdbcDataSourceConfig extends AbstractDatabase {
 
     /**
      * 最大活跃连接数
      */
-    protected JDBCAdapterDataSourceConfig config;
+    protected JdbcAdapterDataSourceConfig config;
 
     /**
      * 连接者（模块）
@@ -24,7 +26,7 @@ public abstract class JDBCDataSourceConfig extends Database{
      * @param username     数据库用户名
      * @param password     数据库密码
      */
-    public JDBCDataSourceConfig(String hostname, Integer port, String databaseName, String username, String password) {
+    public AbstractJdbcDataSourceConfig(String hostname, Integer port, String databaseName, String username, String password) {
         super(hostname, port, databaseName, username, password);
     }
 

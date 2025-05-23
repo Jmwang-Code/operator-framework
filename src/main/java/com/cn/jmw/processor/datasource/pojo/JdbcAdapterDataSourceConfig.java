@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class JdbcAdapterDataSourceConfig extends com.cn.jmw.processor.datasource.pojo.AbstractAdapterDataSourceConfig {
+public class JdbcAdapterDataSourceConfig extends AbstractAdapterDataSourceConfig {
 
     private DataSourcePool dataSourcePool = DataSourcePool.HIKARICP;
 
