@@ -1,7 +1,6 @@
 package com.cn.jmw.processor.datasource.nosql.adapter;
 
-import com.cn.jmw.processor.datasource.JDBCAdapter;
-import com.cn.jmw.processor.datasource.NoSqlAdapter;
+import com.cn.jmw.processor.datasource.AbstractNoSqlAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
 import org.apache.commons.lang3.StringUtils;
@@ -18,8 +17,10 @@ import static com.cn.jmw.common.exception.util.ServiceExceptionUtil.exception;
  * <p>
  * 该类扩展了JDBCAdapter，提供了与Hive相关的数据库操作。
  * </p>
+ *
+ * @author Jmwang
  */
-public class HiveJDBCAdapter extends NoSqlAdapter {
+public class HiveJdbcAdapter extends AbstractNoSqlAdapter {
     /**
      * 构造函数用于创建HiveJDBCAdapter实例。
      *
@@ -29,7 +30,7 @@ public class HiveJDBCAdapter extends NoSqlAdapter {
      * @param username     用户名
      * @param password     密码
      */
-    public HiveJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password) {
+    public HiveJdbcAdapter(String hostname, Integer port, String databaseName, String username, String password) {
         super(hostname, port, databaseName, username, password);
     }
 
@@ -58,7 +59,7 @@ public class HiveJDBCAdapter extends NoSqlAdapter {
      * 添加随机采样
      * <h1>不允许出现 ORDER BY、 LIMIT等字眼</h1>
      *
-     * @param sql
+     * @param sql SQL语句
      * @return 增加随机抽样后的SQL
      */
     @Override
@@ -66,7 +67,7 @@ public class HiveJDBCAdapter extends NoSqlAdapter {
         if (StringUtils.isBlank(sql)){
             throw exception(RANDOM_SAMPLING_ERROR);
         }
-        Matcher matcher = RandomSamplingCompile.matcher(sql);
+        Matcher matcher = RANDOM_SAMPLING_COMPILE.matcher(sql);
         if (matcher.find()){
             throw exception(RANDOM_SAMPLING_NOT_ALLOW_KEYWORD);
         }

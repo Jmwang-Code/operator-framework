@@ -1,7 +1,6 @@
 package com.cn.jmw.processor.datasource.nosql.adapter;
 
-import com.cn.jmw.processor.datasource.JDBCAdapter;
-import com.cn.jmw.processor.datasource.NoSqlAdapter;
+import com.cn.jmw.processor.datasource.AbstractNoSqlAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
 
@@ -12,8 +11,10 @@ import java.util.List;
  * <p>
  * 该类扩展了JDBCAdapter，提供了与SelectDB相关的数据库操作。
  * </p>
+ *
+ * @author Jmwang
  */
-public class SelectDBJDBCAdapter extends NoSqlAdapter {
+public class SelectDbJdbcAdapter extends AbstractNoSqlAdapter {
     /**
      * 构造函数用于创建SelectDBJDBCAdapter实例。
      *
@@ -23,7 +24,7 @@ public class SelectDBJDBCAdapter extends NoSqlAdapter {
      * @param username     用户名
      * @param password     密码
      */
-    public SelectDBJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password) {
+    public SelectDbJdbcAdapter(String hostname, Integer port, String databaseName, String username, String password) {
         super(hostname, port, databaseName, username, password);
     }
 

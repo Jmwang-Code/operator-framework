@@ -1,15 +1,16 @@
 package com.cn.jmw.processor.datasource.nosql.adapter;
 
-import com.cn.jmw.processor.datasource.NoSqlAdapter;
+import com.cn.jmw.processor.datasource.AbstractNoSqlAdapter;
 import com.cn.jmw.processor.datasource.enums.DatabaseEnum;
 import com.cn.jmw.processor.datasource.pojo.ColumnEntity;
 import com.cn.jmw.processor.datasource.pojo.DatabaseEntity;
 import com.cn.jmw.processor.datasource.pojo.TableEntity;
-import com.cn.jmw.processor.datasource.nosql.query.NoSQLQuery;
+import com.cn.jmw.processor.datasource.nosql.query.NoSqlQuery;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.bson.Document;
 
@@ -23,8 +24,11 @@ import java.util.Map;
  * <p>
  * 该类扩展了NoSqlAdapter，提供了与MongoDB相关的数据库操作。
  * </p>
+ *
+ * @author Jmwang
  */
-public class MongoDBJDBCAdapter extends NoSqlAdapter {
+@Slf4j
+public class MongoDbJdbcAdapter extends AbstractNoSqlAdapter {
 
     /**
      * 构造函数用于创建MongoDBJDBCAdapter实例。
@@ -35,7 +39,7 @@ public class MongoDBJDBCAdapter extends NoSqlAdapter {
      * @param username     用户名
      * @param password     密码
      */
-    public MongoDBJDBCAdapter(String hostname, Integer port, String databaseName, String username, String password) {
+    public MongoDbJdbcAdapter(String hostname, Integer port, String databaseName, String username, String password) {
         super(hostname, port, databaseName, username, password);
     }
 
@@ -66,16 +70,13 @@ public class MongoDBJDBCAdapter extends NoSqlAdapter {
      */
     @Override
     public boolean testConnection() {
-        MongoClient mongoClient = MongoClients.create(getConnectionString());
-        try {
+        try (MongoClient mongoClient = MongoClients.create(getConnectionString())) {
             // 尝试获取一个数据库并执行简单操作
             mongoClient.getDatabase(super.databaseName).getName();
             return true;
         } catch (Exception e) {
             // 如果抛出异常，则连接无效
             return false;
-        } finally {
-            mongoClient.close();
         }
     }
 
@@ -86,7 +87,6 @@ public class MongoDBJDBCAdapter extends NoSqlAdapter {
      */
     @Override
     public List<DatabaseEntity> getDatabaseMetadata(String datebaseName) {
-//        MongoClient mongoClient = MongoClients.create(getConnectionString());
         List<DatabaseEntity> databaseEntities = new ArrayList<>();
         // 获取所有数据库
         // 使用 try-with-resources 确保资源自动关闭
@@ -104,7 +104,7 @@ public class MongoDBJDBCAdapter extends NoSqlAdapter {
                 }
                 MongoDatabase db = mongoClient.getDatabase(dbName);
                 // 获取数据库中的所有集合
-                Map<String,TableEntity> tableEntities = new HashMap<>();
+                Map<String,TableEntity> tableEntities = new HashMap<>(16);
                 for (String collectionName : db.listCollectionNames()) {
                     TableEntity tableEntity = new TableEntity();
                     tableEntity.setTableName(collectionName);
@@ -113,7 +113,7 @@ public class MongoDBJDBCAdapter extends NoSqlAdapter {
                     MongoCollection<Document> collection = db.getCollection(collectionName);
                     Document firstDoc = collection.find().first();
                     if (firstDoc != null) {
-                        Map<String,ColumnEntity> columnEntities = new HashMap<>();
+                        Map<String,ColumnEntity> columnEntities = new HashMap<>(16);
                         for (String fieldName : firstDoc.keySet()) {
                             ColumnEntity columnEntity = new ColumnEntity();
                             columnEntity.setColumnName(fieldName);
@@ -128,8 +128,7 @@ public class MongoDBJDBCAdapter extends NoSqlAdapter {
                 databaseEntities.add(databaseEntity);
             }
         } catch (Exception e) {
-            e.printStackTrace();
-            // 根据需要处理异常，可能抛出自定义异常或记录日志
+            log.error("获取数据库元数据失败", e);
         }
         return databaseEntities;
     }
@@ -165,11 +164,11 @@ public class MongoDBJDBCAdapter extends NoSqlAdapter {
     /**
      * 执行NoSQL查询。
      *
-     * @param noSQLQuery 要执行的NoSQL查询对象
+     * @param noSqlQuery 要执行的NoSQL查询对象
      * @return 返回查询结果
      */
     @Override
-    public List query(NoSQLQuery noSQLQuery) {
+    public List query(NoSqlQuery noSqlQuery) {
         return null;
     }
 }
